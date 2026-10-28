@@ -1,0 +1,32 @@
+# Tim Howes portfolio — timhowes.me
+
+Static HTML site: no build step, no framework. Pages are `index.html`, `about.html` and `work/*.html`;
+shared styles in `css/site.css`; scripts in `js/`. Brand tokens are the CSS custom properties at the top
+of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
+
+## Where the site lives
+- **GitHub is the source of truth.** Do not edit the old "Tim Howes Portfolio" claude.ai artifact; changes
+  made there never reach the live site.
+- **Netlify** deploys from this repo. `main` = production at https://timhowes.me. Every push to `main`
+  goes live within about a minute, so only merge finished work into `main`.
+- Experiments go on their own branch (e.g. `water`). Netlify branch deploys give each one a preview at
+  `<branch>--<netlify-project>.netlify.app`. Tim tests on his phone there before anything is merged.
+
+## Working rules
+- Keep changes surgical and match the existing hand-written HTML/CSS style.
+- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 15
+  pages (`work/ruscella-immersive-website.html` is only a redirect).
+- Links between pages are relative (`../` from `work/`).
+- Respect `prefers-reduced-motion` in anything animated.
+- Commit with clear messages and push; tell Tim the preview or live URL to check.
+
+## Ocean water layer (`js/water.js`)
+- WebGL shallow-water simulation fixed to the viewport, under the header (`z-index` 50 vs header 60),
+  `pointer-events: none` so the page stays clickable.
+- Reacts to cursor (only over the water, stronger with speed), touch, scroll (slosh then settle) and phone
+  tilt. Volume is constant: laid flat, the water spreads into a thin clear sheet.
+- iPhone motion needs a tap to grant permission (the "Tilt your phone" chip). Motion sensors only work
+  over HTTPS on the real site, not inside claude.ai artifact previews.
+- `data-lab` on the script tag shows the tuning panel. Before shipping to `main`: bake Tim's chosen
+  settings into the defaults object `S` and remove `data-lab` from every page.
+- The old image-based page-transition wave (`wave.js`, `.wash`) was removed on purpose; don't bring it back.
