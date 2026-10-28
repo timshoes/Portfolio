@@ -26,7 +26,8 @@
     scroll: 0.8,     // scroll slosh strength
     calm: 1.15,       // how fast motion dies down
     surf: 0.6,     // incoming waves running up the shore
-    speed: 0.5    // wave speed, screen heights per second
+    speed: 0.5,   // wave speed, screen heights per second
+    bend: 1       // how much the page bends under the water (Chrome-based browsers only)
   };
   var lab = {};   // lab panel elements; declared early because motion can start before the panel is built
   // a visitor's own settings from the Water Lab page follow them to every page
@@ -63,7 +64,7 @@
   // ---------- simulation grid ----------
   var HMAX = 4;                 // depth that maps to full brightness in the texture
   var cols = 0, rows = 0, N = 0, cellPx = 1;
-  var h, u, v, P, kf, ag, tex8;
+  var h, u, v, P, kf, ag, wm, tex8;
   var volume = 0, drift = 0;
   var W = 0, H = 0, dpr = 1;
 
@@ -75,8 +76,8 @@
     var oh = h, oc = cols, or = rows;
     cols = nc; rows = nr; N = cols * rows;
     h = new Float32Array(N); u = new Float32Array(N); v = new Float32Array(N);
-    P = new Float32Array(N); kf = new Float32Array(N); ag = new Float32Array(N);
-    tex8 = new Uint8Array(N * 2);
+    P = new Float32Array(N); kf = new Float32Array(N); ag = new Float32Array(N); wm = new Float32Array(N);
+    tex8 = new Uint8Array(N * 4);
     volume = targetVolume();
     if (oh) {
       for (var y = 0; y < rows; y++) for (var x = 0; x < cols; x++)
@@ -247,12 +248,16 @@
     "return pow(clamp(1.-abs(a1-a2)*3.,0.,1.),8.);}",
     "void main(){",
     " vec2 uv=vec2(gl_FragCoord.x/uRes.x,(uCanH-gl_FragCoord.y-uOver)/uRes.y);",
+    // r: depth, g: churn, b: how recently this spot was under water
     " vec4 s=texture2D(uH,uv);float h=s.r*s.r*uHMax;",
-    " if(h<.004){gl_FragColor=vec4(0.);return;}",
+    " if(h<.004&&s.b<.02){gl_FragColor=vec4(0.);return;}",
     " vec2 px=gl_FragCoord.xy/uDpr;float t=uTime;vec2 q=px/90.;",
     " float thr=.012+.012*fbm(q*1.3+vec2(t*.05,-t*.08));",
     " float wet=smoothstep(thr,thr+.012,h);",
-    " if(wet<=0.){gl_FragColor=vec4(0.);return;}",
+    // wet sand: a darker band left behind when the water pulls back
+    " float sa=.07*s.b*s.b*(1.-wet)*(.7+.3*noise(q*7.));",
+    " vec3 sc=vec3(.36,.27,.17);",
+    " if(wet<=0.){gl_FragColor=vec4(sc*sa,sa);return;}",
     " vec2 tx=1./uGrid;",
     " vec2 g=vec2(H(uv+vec2(tx.x,0.))-H(uv-vec2(tx.x,0.)),H(uv+vec2(0.,tx.y))-H(uv-vec2(0.,tx.y)))*.5;",
     // estimated distance to the shoreline, in css px
@@ -260,22 +265,34 @@
     " float lace=fbm(q*4.+vec2(t*.12,t*.05)+g*14.);",
     " float foam=(1.-smoothstep(0.,14.+30.*lace,distPx))*smoothstep(.2,.5,lace+.2);",
     // whitecaps only where the water is deep enough to churn
-    " foam=max(foam,smoothstep(.3,.9,s.a)*smoothstep(.42,.68,lace)*smoothstep(.12,.45,h));",
+    " foam=max(foam,smoothstep(.3,.9,s.g)*smoothstep(.42,.68,lace)*smoothstep(.12,.45,h));",
     " foam=clamp(foam*uFoam,0.,1.);",
-    " vec2 o=q*2.2+vec2(t*.18,t*.11);",
-    " vec2 rn=vec2(fbm(o)-fbm(o+vec2(.06,0.)),fbm(o+9.)-fbm(o+vec2(9.,9.06)))*10.;",
-    " vec3 N=normalize(vec3(-g.x*5.+rn.x*.35,g.y*5.+rn.y*.35,1.));",
-    " vec3 L=normalize(vec3(-.35,.55,.75));",
-    " float spec=pow(max(dot(reflect(-L,N),vec3(0.,0.,1.)),0.),48.);",
-    " float depth=1.-exp(-h*1.7);",
-    " vec3 col=mix(vec3(.42,.88,.84),vec3(.10,.70,.78),smoothstep(0.,.5,depth));",
-    " col=mix(col,vec3(.03,.40,.56),smoothstep(.45,1.,depth));",
-    " col+=vec3(.85,1.,.95)*caustic(px/55.,t)*(1.-depth)*.35;",
-    " float a=uClar*(.16+.70*depth);",
-    " col+=spec*.9;a=max(a,spec*.7);",
+    // surface: slow swell plus fine ripples, calmer where the water is thin
+    " float calm=smoothstep(.02,.35,h);",
+    " vec2 o1=q*2.2+vec2(t*.18,t*.11),o2=q*5.5+vec2(-t*.35,t*.22);",
+    " vec2 rn=vec2(fbm(o1)-fbm(o1+vec2(.06,0.)),fbm(o1+9.)-fbm(o1+vec2(9.,9.06)))*10.;",
+    " vec2 rf=vec2(noise(o2)-noise(o2+vec2(.08,0.)),noise(o2+5.)-noise(o2+vec2(5.,5.08)))*6.;",
+    " vec2 rip=(rn*.35+rf*.25)*(.4+.6*calm);",
+    " vec3 N=normalize(vec3(-g.x*5.+rip.x,g.y*5.+rip.y,1.));",
+    // light absorbed by depth: red fades first, so shallows read turquoise and deep water blue
+    " vec3 T=exp(-vec3(2.4,.75,.5)*h*1.3);",
+    " float tr=(T.r+T.g+T.b)/3.;",
+    " vec3 col=vec3(.03,.38,.55)*(1.-T)+vec3(.45,.90,.86)*T;",
+    // caustics on the floor, split slightly by colour, brightest in mid-shallow water
+    " vec2 cp=px/55.;",
+    " vec3 cau=vec3(caustic(cp+vec2(.04,0.),t),caustic(cp,t),caustic(cp-vec2(.04,0.),t));",
+    " col+=cau*vec3(.85,1.,.95)*tr*smoothstep(0.,.08,h)*.45;",
+    // sky reflected more on sloped water
+    " col=mix(col,vec3(.80,.93,1.),clamp(.03+.6*pow(1.-N.z,1.5),0.,.5));",
+    // sun: a broad sheen and sharp glints on the ripples
+    " vec3 R=reflect(-normalize(vec3(-.35,.55,.75)),N);",
+    " float sheen=pow(max(R.z,0.),20.)*.15,glint=pow(max(R.z,0.),220.)*1.6*(.5+.5*calm);",
+    " float a=uClar*(.14+.72*(1.-tr));",
+    " col+=sheen+glint;a=max(a,min(glint,1.)*.8);",
     " col=mix(col,vec3(.984,.953,.902),foam);a=mix(a,.92,foam);",
     " a=clamp(a*wet,0.,.95);",
-    " gl_FragColor=vec4(col*a,a);",
+    // water over the wet sand, premultiplied
+    " gl_FragColor=vec4(col*a+sc*sa*(1.-a),a+sa*(1.-a));",
     "}"
   ].join("\n");
 
@@ -314,7 +331,7 @@
     W = window.innerWidth || document.documentElement.clientWidth;
     H = window.innerHeight || document.documentElement.clientHeight;
     if (W < 50 || H < 50) return;   // some browsers report 0 before layout; frame() retries
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);   // the water is soft; more pixels cost more than they show
     canvas.width = Math.round(W * dpr); canvas.height = Math.round((H + 2 * OVER) * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
     var nc = Math.max(32, Math.min(180, Math.round(W / (W < 700 ? 8 : 9))));
@@ -327,11 +344,12 @@
     if (!N) return;
     for (var i = 0; i < N; i++) {
       var e = Math.sqrt(Math.min(h[i] / HMAX, 1)) * 255;
-      tex8[i * 2] = e;
-      tex8[i * 2 + 1] = Math.min(255, ag[i] * 255);
+      tex8[i * 4] = e;
+      tex8[i * 4 + 1] = Math.min(255, ag[i] * 255);
+      tex8[i * 4 + 2] = wm[i] * 255;
     }
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE_ALPHA, cols, rows, 0, gl.LUMINANCE_ALPHA, gl.UNSIGNED_BYTE, tex8);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, tex8);
     gl.uniform2f(U.uRes, canvas.width, H * dpr);
     gl.uniform1f(U.uOver, OVER * dpr);
     gl.uniform1f(U.uCanH, canvas.height);
@@ -347,15 +365,52 @@
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  // churned water shows whitecaps
+  // churned water shows whitecaps; spots the water just left stay dark (wet sand) for a moment
   function updateAgitation(dt) {
-    var decay = Math.exp(-dt * 2.5), scale = 1 / (S.speed * rows * 0.35);
+    var decay = Math.exp(-dt * 2.5), dry = Math.exp(-dt / 1.8), scale = 1 / (S.speed * rows * 0.35);
     for (var y = 0, i = 0; y < rows; y++) for (var x = 0; x < cols; x++, i++) {
       var fu = x < cols - 1 ? u[i] : 0, fv = y < rows - 1 ? v[i] : 0;
       var vel = Math.sqrt(fu * fu + fv * fv) / (h[i] + 0.15) * scale;
       var a = Math.min(1, Math.max(0, vel - 0.35));
       ag[i] = Math.max(ag[i] * decay, a);
+      wm[i] = h[i] > 0.02 ? 1 : wm[i] * dry;
     }
+  }
+
+  // ---------- page bending under the water ----------
+  // Chrome-based browsers can run an SVG ripple filter on whatever sits behind an element
+  // (backdrop-filter: url()). A layer under the canvas, clipped to the water's outline, bends the page there.
+  var bend = null;
+  if (!reduce && navigator.userAgentData) {
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
+    svg.style.position = "absolute";
+    svg.innerHTML = '<filter id="water-bend" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4"><animate attributeName="baseFrequency" dur="7s" values="0.012 0.04;0.015 0.034;0.012 0.04" repeatCount="indefinite"/></feTurbulence><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/></filter>';
+    document.body.appendChild(svg);
+    var layer = document.createElement("div");
+    layer.setAttribute("aria-hidden", "true");
+    layer.style.cssText = "position:fixed;left:0;top:-" + OVER + "px;width:100%;height:calc(100% + " + 2 * OVER + "px);z-index:49;pointer-events:none;backdrop-filter:url(#water-bend);display:none";
+    document.body.appendChild(layer);
+    bend = { layer: layer, map: svg.querySelector("feDisplacementMap"), clip: "", scale: -1, tick: 0 };
+  }
+  function updateBend() {
+    if (!bend || ++bend.tick % 3) return;
+    if (S.bend <= 0) { if (bend.clip !== "off") { bend.layer.style.display = "none"; bend.clip = "off"; } return; }
+    // outline: the topmost wet cell in every few columns, in layer pixels
+    var rowPx = H / rows, step = Math.max(1, Math.round(cols / 40)), pts = [], wetSum = 0, wetN = 0, any = false;
+    for (var x = 0; x < cols; x += step) {
+      var top = H + OVER;
+      for (var y = 0; y < rows; y++) if (h[y * cols + x] > 0.03) { top = y * rowPx; any = true; break; }
+      pts.push(Math.round(x * cellPx) + "px " + Math.round(top + OVER) + "px");
+    }
+    for (var i = 0; i < N; i += 7) if (h[i] > 0.03) { wetSum += h[i]; wetN++; }
+    if (!any) { if (bend.clip !== "none") { bend.layer.style.display = "none"; bend.clip = "none"; } return; }
+    var clip = "polygon(0 100%," + pts.join(",") + ",100% " + pts[pts.length - 1].split(" ")[1] + ",100% 100%)";
+    if (clip !== bend.clip) { bend.layer.style.clipPath = clip; bend.layer.style.display = "block"; bend.clip = clip; }
+    // thin water bends the page less
+    var sc = Math.round(16 * S.bend * Math.min(1, Math.max(0.2, (wetSum / Math.max(1, wetN)) / 0.5)));
+    if (sc !== bend.scale) { bend.map.setAttribute("scale", sc); bend.scale = sc; }
   }
 
   // ---------- frame loop ----------
@@ -431,6 +486,7 @@
     normalize();
     updateAgitation(dt);
     draw(now);
+    updateBend();
   }
 
   function start() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
@@ -504,7 +560,8 @@
       ["scroll", "Scroll slosh", 0, 2.5, 0.05],
       ["calm", "Settling speed", 0.2, 3, 0.05],
       ["surf", "Surf", 0, 1.5, 0.05],
-      ["speed", "Wave speed", 0.25, 1, 0.05]
+      ["speed", "Wave speed", 0.25, 1, 0.05],
+      ["bend", "Page bending (Chrome, Edge, Brave)", 0, 2, 0.1]
     ];
     sliders.forEach(function (d) {
       var key = d[0], fmt = d[5] || function (x) { return (+x).toFixed(2); };
