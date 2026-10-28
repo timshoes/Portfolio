@@ -19,14 +19,14 @@
 
   // tunables (the lab panel edits these)
   var S = {
-    level: 0.15,   // share of screen height the water fills when the phone is upright
-    clarity: 1,    // overall opacity
-    foam: 1,       // shoreline foam amount
-    cursor: 1,     // cursor and finger strength
-    scroll: 1,     // scroll slosh strength
-    calm: 1,       // how fast motion dies down
+    level: 0.13,   // share of screen height the water fills when the phone is upright
+    clarity: 1.3,    // overall opacity
+    foam: 1.6,       // shoreline foam amount
+    cursor: 1.4,     // cursor and finger strength
+    scroll: 0.8,     // scroll slosh strength
+    calm: 1.15,       // how fast motion dies down
     surf: 0.6,     // incoming waves running up the shore
-    speed: 0.55    // wave speed, screen heights per second
+    speed: 0.5    // wave speed, screen heights per second
   };
   var lab = {};   // lab panel elements; declared early because motion can start before the panel is built
   if (LAB) try { var saved = JSON.parse(localStorage.getItem("water-lab") || "{}"); for (var k in saved) if (k in S) S[k] = +saved[k]; } catch (e) {}
