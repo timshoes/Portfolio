@@ -32,9 +32,12 @@
   if (LAB) try { var saved = JSON.parse(localStorage.getItem("water-lab") || "{}"); for (var k in saved) if (k in S) S[k] = +saved[k]; } catch (e) {}
 
   // ---------- page layer ----------
+  // The canvas reaches OVER px past the top and bottom of the screen. Mobile toolbars change the screen
+  // height while scrolling, and the extra water fills the gap until the layer catches up.
+  var OVER = 140;
   var css = document.createElement("style");
   css.textContent =
-    ".water-layer{position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;display:block}" +
+    ".water-layer{position:fixed;left:0;top:-" + OVER + "px;width:100%;height:calc(100% + " + 2 * OVER + "px);z-index:50;pointer-events:none;display:block}" +
     ".site-head{position:relative;z-index:60}" +
     ".water-chip{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;font:600 14px var(--sans,system-ui);color:#1F2E3A;background:#FBF3E6;border:0;border-radius:999px;padding:10px 16px;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer}" +
     ".water-chip:focus-visible,.wl button:focus-visible,.wl input:focus-visible{outline:2px solid #E8772A;outline-offset:2px}";
@@ -233,7 +236,7 @@
   var VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
   var FS = [
     "#ifdef GL_FRAGMENT_PRECISION_HIGH", "precision highp float;", "#else", "precision mediump float;", "#endif",
-    "uniform sampler2D uH;uniform vec2 uRes,uGrid;uniform float uDpr,uCell,uTime,uClar,uFoam,uHMax;",
+    "uniform sampler2D uH;uniform vec2 uRes,uGrid;uniform float uOver,uCanH,uDpr,uCell,uTime,uClar,uFoam,uHMax;",
     "float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}",
     "float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}",
     "float fbm(vec2 p){float a=.5,s=0.;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+17.1;a*=.5;}return s;}",
@@ -242,7 +245,7 @@
     "float caustic(vec2 p,float t){float a1=noise(p+vec2(t*.30,t*.20)),a2=noise(p*1.3-vec2(t*.25,-t*.15)+4.);",
     "return pow(clamp(1.-abs(a1-a2)*3.,0.,1.),8.);}",
     "void main(){",
-    " vec2 uv=vec2(gl_FragCoord.x/uRes.x,1.-gl_FragCoord.y/uRes.y);",
+    " vec2 uv=vec2(gl_FragCoord.x/uRes.x,(uCanH-gl_FragCoord.y-uOver)/uRes.y);",
     " vec4 s=texture2D(uH,uv);float h=s.r*s.r*uHMax;",
     " if(h<.004){gl_FragColor=vec4(0.);return;}",
     " vec2 px=gl_FragCoord.xy/uDpr;float t=uTime;vec2 q=px/90.;",
@@ -296,7 +299,7 @@
   gl.enableVertexAttribArray(aLoc);
   gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
   var U = {};
-  ["uH", "uRes", "uGrid", "uDpr", "uCell", "uTime", "uClar", "uFoam", "uHMax"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+  ["uH", "uRes", "uOver", "uCanH", "uGrid", "uDpr", "uCell", "uTime", "uClar", "uFoam", "uHMax"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
   var texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -311,7 +314,7 @@
     H = window.innerHeight || document.documentElement.clientHeight;
     if (W < 50 || H < 50) return;   // some browsers report 0 before layout; frame() retries
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round((H + 2 * OVER) * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
     var nc = Math.max(32, Math.min(180, Math.round(W / (W < 700 ? 8 : 9))));
     var nr = Math.max(16, Math.round(H / (W / nc)));
@@ -328,7 +331,9 @@
     }
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE_ALPHA, cols, rows, 0, gl.LUMINANCE_ALPHA, gl.UNSIGNED_BYTE, tex8);
-    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform2f(U.uRes, canvas.width, H * dpr);
+    gl.uniform1f(U.uOver, OVER * dpr);
+    gl.uniform1f(U.uCanH, canvas.height);
     gl.uniform2f(U.uGrid, cols, rows);
     gl.uniform1f(U.uDpr, dpr);
     gl.uniform1f(U.uCell, cellPx);
