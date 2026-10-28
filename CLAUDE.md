@@ -27,6 +27,7 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   tilt. Volume is constant: laid flat, the water spreads into a thin clear sheet.
 - iPhone motion needs a tap to grant permission (the "Tilt your phone" chip). Motion sensors only work
   over HTTPS on the real site, not inside claude.ai artifact previews.
-- `data-lab` on the script tag shows the tuning panel. Before shipping to `main`: bake Tim's chosen
-  settings into the defaults object `S` and remove `data-lab` from every page.
+- Defaults in the object `S` are Tim's tuned settings. `data-lab` on the script tag shows the tuning
+  panel; only `work/water-lab.html` (the Water Lab case study) has it. A visitor's own settings are saved
+  in their browser (`localStorage` key `water-lab`) and applied on every page.
 - The old image-based page-transition wave (`wave.js`, `.wash`) was removed on purpose; don't bring it back.
