@@ -36,7 +36,16 @@
   canvas.setAttribute("aria-hidden", "true");
   document.body.appendChild(canvas);
   var gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false });
-  if (!gl) { canvas.remove(); return; }
+  // in the lab, say why the water is missing instead of failing silently
+  function fail(why) {
+    canvas.remove();
+    if (!LAB) return;
+    var note = document.createElement("p");
+    note.className = "water-chip"; note.style.cursor = "default";
+    note.textContent = "Water could not start: " + why;
+    document.body.appendChild(note);
+  }
+  if (!gl) { fail("this browser blocked WebGL graphics"); return; }
 
   // ---------- simulation grid ----------
   var HMAX = 4;                 // depth that maps to full brightness in the texture
@@ -167,6 +176,8 @@
   }
   function onOrient(e) {
     if (e.beta == null || e.gamma == null) return;
+    // privacy shields (e.g. Brave) can report a fixed 0,0 reading, which would look like a phone lying flat
+    if (e.beta === 0 && e.gamma === 0) { if (!motion.got) { motion.status = "blocked"; if (LAB) labStatus(); } return; }
     motion.got = true; motion.status = "on";
     var b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
     var x = Math.sin(g) * Math.cos(b), y = Math.sin(b), z = Math.abs(Math.cos(g) * Math.cos(b));
@@ -267,7 +278,7 @@
     gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-  } catch (err) { console.warn("[water]", err); canvas.remove(); return; }
+  } catch (err) { console.warn("[water]", err); fail("shader error (" + String(err.message || err).slice(0, 80) + ")"); return; }
   gl.useProgram(prog);
   var buf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
