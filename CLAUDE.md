@@ -22,7 +22,8 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   "Next project" chain on case studies follows the same order. Use facts from the case studies; never
   invent results.
 - Brand case studies share one simple layout (AccessVR is the template): top, Challenge/Solution, My role,
-  a page-through Style guide, one Highlight image, no Results.
+  page-through Brand guidelines (one image per page), one Highlight image, no Results. The Ri guideline
+  pages are rendered from an HTML source in Ri fonts and colours (Bodoni Moda, Inter; black, #330066, #FFC31A).
 - Page-through viewers: `<div class="flip" data-flip>` with one `<figure>` per page, plus `js/flip.js`.
 - Links between pages are relative (`../` from `work/`).
 - Respect `prefers-reduced-motion` in anything animated.

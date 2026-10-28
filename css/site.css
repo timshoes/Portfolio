@@ -312,3 +312,5 @@ button.btn { cursor: pointer; font-family: inherit; }
 .flip-bar button:hover { background: var(--sun-glow); }
 .flip-bar button:disabled { background: var(--dune); color: var(--label); cursor: default; }
 .flip-count { font-size: 15px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
+.lead-cert { display: flex; align-items: center; gap: 14px; }
+.lead-cert img { width: 84px; height: auto; flex: none; }
