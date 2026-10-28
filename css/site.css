@@ -285,3 +285,30 @@ button.btn { cursor: pointer; font-family: inherit; }
 .brand:hover .m-flat, .brand:focus-visible .m-flat, .hero-360 .mark:hover .m-flat { opacity: 0; }
 .brand:hover .m-peel, .brand:focus-visible .m-peel, .hero-360 .mark:hover .m-peel { opacity: 1; transform: scale(1.04) rotate(0deg); }
 @media (prefers-reduced-motion: reduce) { .mark img { transition: opacity .2s ease; transform: none !important; } }
+
+/* home hero: the card sits under the 360 at every width, as on phones */
+.hero.hero-360 { min-height: 0; display: block; background: var(--foam); }
+.hero-360 .pano { position: relative; height: min(68vh, 680px); }
+.hero-360 .wrap { padding-block: 0 40px; margin-top: -96px; grid-template-columns: minmax(0, 640px); }
+.pano-hint { top: 14px; right: 14px; bottom: auto; }
+@media (max-width: 860px) { .hero-360 .pano { height: 56vh; } .hero-360 .wrap { margin-top: -72px; padding-bottom: 32px; } }
+
+/* work page: category filter */
+.filter { padding-block: 0 24px; }
+.filter .wrap { display: flex; gap: 10px; flex-wrap: wrap; }
+.filter a { text-decoration: none; font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 999px; background: var(--dune); border: 1px solid var(--line); }
+.filter a:hover { background: var(--sand); }
+.filter a[aria-current="true"] { background: var(--night); border-color: var(--night); color: var(--foam); }
+
+/* page-through viewer (js/flip.js) */
+.flip { display: grid; gap: 24px; }
+.flip figure { margin: 0; }
+.flip img { width: 100%; border-radius: var(--radius); background: var(--dune); border: 1px solid var(--line); }
+.flip figcaption { margin-top: 10px; font-size: 14px; color: var(--ink-muted); }
+.flip.flip-on { gap: 14px; border-radius: var(--radius); }
+.flip.flip-on:focus-visible { outline: 3px solid var(--pacific); outline-offset: 4px; }
+.flip-bar { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.flip-bar button { font: inherit; font-size: 18px; font-weight: 600; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--sun); color: var(--ink); cursor: pointer; }
+.flip-bar button:hover { background: var(--sun-glow); }
+.flip-bar button:disabled { background: var(--dune); color: var(--label); cursor: default; }
+.flip-count { font-size: 15px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
