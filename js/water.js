@@ -1,0 +1,543 @@
+/* Ocean water layer.
+   A shallow-water simulation on a coarse grid that covers the viewport. Each cell
+   stores how much water it holds; gravity, the cursor, touch and scrolling push it
+   around, and the screen edges hold it in. The amount of water never changes, so
+   when gravity no longer pins it to the bottom (phone laid flat) it spreads into a
+   thinner, clearer sheet. WebGL draws it; the page stays clickable underneath. */
+(function () {
+  var script = document.currentScript;
+  var LAB = !!(script && script.hasAttribute("data-lab"));
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // tunables (the lab panel edits these)
+  var S = {
+    level: 0.15,   // share of screen height the water fills when the phone is upright
+    clarity: 1,    // overall opacity
+    foam: 1,       // shoreline foam amount
+    cursor: 1,     // cursor and finger strength
+    scroll: 1,     // scroll slosh strength
+    calm: 1,       // how fast motion dies down
+    surf: 0.6,     // incoming waves running up the shore
+    speed: 0.55    // wave speed, screen heights per second
+  };
+  if (LAB) try { var saved = JSON.parse(localStorage.getItem("water-lab") || "{}"); for (var k in saved) if (k in S) S[k] = +saved[k]; } catch (e) {}
+
+  // ---------- page layer ----------
+  var css = document.createElement("style");
+  css.textContent =
+    ".water-layer{position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;display:block}" +
+    ".site-head{position:relative;z-index:60}" +
+    ".water-chip{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;font:600 14px var(--sans,system-ui);color:#1F2E3A;background:#FBF3E6;border:0;border-radius:999px;padding:10px 16px;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer}" +
+    ".water-chip:focus-visible,.wl button:focus-visible,.wl input:focus-visible{outline:2px solid #E8772A;outline-offset:2px}";
+  document.head.appendChild(css);
+
+  var canvas = document.createElement("canvas");
+  canvas.className = "water-layer";
+  canvas.setAttribute("aria-hidden", "true");
+  document.body.appendChild(canvas);
+  var gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false });
+  if (!gl) { canvas.remove(); return; }
+
+  // ---------- simulation grid ----------
+  var HMAX = 4;                 // depth that maps to full brightness in the texture
+  var cols = 0, rows = 0, N = 0, cellPx = 1;
+  var h, u, v, P, kf, ag, tex8;
+  var volume = 0, drift = 0;
+  var W = 0, H = 0, dpr = 1;
+
+  function bandRows() { return Math.max(2, S.level * rows); }
+  function slopeG() { return 1 / bandRows(); }          // depth gained per row below the waterline, upright
+  function targetVolume() { return cols * 0.5 * bandRows(); }
+
+  function buildGrid(nc, nr) {
+    var oh = h, oc = cols, or = rows;
+    cols = nc; rows = nr; N = cols * rows;
+    h = new Float32Array(N); u = new Float32Array(N); v = new Float32Array(N);
+    P = new Float32Array(N); kf = new Float32Array(N); ag = new Float32Array(N);
+    tex8 = new Uint8Array(N * 2);
+    volume = targetVolume();
+    if (oh) {
+      for (var y = 0; y < rows; y++) for (var x = 0; x < cols; x++)
+        h[y * cols + x] = oh[Math.min(or - 1, (y * or / rows) | 0) * oc + Math.min(oc - 1, (x * oc / cols) | 0)];
+    } else {
+      var L = bandRows(), top = rows - L;
+      for (var y2 = 0; y2 < rows; y2++) {
+        var d = Math.max(0, (y2 + 0.5 - top) / L);
+        for (var x2 = 0; x2 < cols; x2++) h[y2 * cols + x2] = d;
+      }
+    }
+    normalize();
+  }
+
+  function normalize() {
+    var s = 0;
+    for (var i = 0; i < N; i++) s += h[i];
+    drift = s / volume - 1;
+    if (s > 0) { var f = volume / s; for (var j = 0; j < N; j++) h[j] *= f; }
+  }
+
+  // gravity in screen space: x right, y down, z into the screen (all 0..1)
+  var grav = { x: 0, y: 1, z: 0 }, gravTarget = { x: 0, y: 1, z: 0 };
+
+  function step(dt) {
+    var c0 = 1, K = 2;
+    var pz = K * grav.z + c0;
+    var sp = S.speed * rows;
+    var A = sp * sp / c0;
+    var G = slopeG();
+    var ax = A * G * grav.x, ay = A * G * grav.y;
+    var damp = Math.exp(-0.9 * S.calm * dt);
+    var x, y, i, out;
+    for (i = 0; i < N; i++) P[i] = pz * h[i];
+    for (y = 0; y < rows; y++) for (x = 0, i = y * cols; x < cols - 1; x++, i++)
+      u[i] = u[i] * damp + dt * (A * (P[i] - P[i + 1]) + ax);
+    for (i = 0; i < N - cols; i++)
+      v[i] = v[i] * damp + dt * (A * (P[i] - P[i + cols]) + ay);
+    // never let a cell send away more water than it holds
+    for (y = 0, i = 0; y < rows; y++) for (x = 0; x < cols; x++, i++) {
+      out = 0;
+      if (x < cols - 1 && u[i] > 0) out += u[i];
+      if (x > 0 && u[i - 1] < 0) out -= u[i - 1];
+      if (y < rows - 1 && v[i] > 0) out += v[i];
+      if (y > 0 && v[i - cols] < 0) out -= v[i - cols];
+      out *= dt;
+      kf[i] = out > h[i] ? h[i] / out : 1;
+    }
+    for (y = 0; y < rows; y++) for (x = 0, i = y * cols; x < cols - 1; x++, i++)
+      u[i] *= u[i] > 0 ? kf[i] : kf[i + 1];
+    for (i = 0; i < N - cols; i++)
+      v[i] *= v[i] > 0 ? kf[i] : kf[i + cols];
+    for (y = 0, i = 0; y < rows; y++) for (x = 0; x < cols; x++, i++) {
+      var net = 0;
+      if (x > 0) net += u[i - 1];
+      if (x < cols - 1) net -= u[i];
+      if (y > 0) net += v[i - cols];
+      if (y < rows - 1) net -= v[i];
+      var nh = h[i] + dt * net;
+      h[i] = nh > 0 ? nh : 0;
+    }
+  }
+
+  // push water at (cx, cy) in cells, radius r, with a flow (fx, fy) in cells/s
+  function push(cx, cy, r, fx, fy, radial, dt) {
+    var x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(cols - 1, Math.ceil(cx + r));
+    var y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(rows - 1, Math.ceil(cy + r));
+    for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) {
+      var dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.sqrt(dx * dx + dy * dy);
+      if (d >= r) continue;
+      var i = y * cols + x, w = (1 - d / r); w *= w;
+      var depth = Math.min(h[i], 1.2);
+      if (depth <= 0) continue;
+      var k = w * depth * dt * 6;
+      var nx = d > 0 ? dx / d : 0, ny = d > 0 ? dy / d : 0;
+      u[i] += k * (fx + nx * radial);
+      v[i] += k * (fy + ny * radial);
+    }
+  }
+
+  function depthAt(px, py) {
+    var x = Math.min(cols - 1, Math.max(0, (px / cellPx) | 0)), y = Math.min(rows - 1, Math.max(0, (py / (H / rows)) | 0));
+    return h[y * cols + x];
+  }
+
+  // ---------- input ----------
+  var ptr = { x: 0, y: 0, vx: 0, vy: 0, t: 0, fresh: false };
+  function track(x, y) {
+    var now = performance.now(), dt = Math.max(8, now - ptr.t) / 1000;
+    if (ptr.t && now - ptr.t < 120) {
+      ptr.vx += ((x - ptr.x) / dt - ptr.vx) * 0.5;
+      ptr.vy += ((y - ptr.y) / dt - ptr.vy) * 0.5;
+    } else { ptr.vx = 0; ptr.vy = 0; }
+    ptr.x = x; ptr.y = y; ptr.t = now; ptr.fresh = true;
+  }
+  if (!reduce) {
+    window.addEventListener("pointermove", function (e) { if (e.pointerType === "mouse" || e.pointerType === "pen") track(e.clientX, e.clientY); }, { passive: true });
+    window.addEventListener("touchstart", function (e) { var t = e.touches[0]; ptr.t = 0; track(t.clientX, t.clientY); }, { passive: true });
+    window.addEventListener("touchmove", function (e) { var t = e.touches[0]; track(t.clientX, t.clientY); }, { passive: true });
+  }
+
+  var lastScrollY = window.scrollY, scrollVel = 0;
+
+  // device tilt
+  var motion = { on: false, got: false, status: "off" };
+  var sensorG = null, padG = null;
+  function screenAngle() {
+    var a = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle : (window.orientation || 0);
+    return a * Math.PI / 180;
+  }
+  function onOrient(e) {
+    if (e.beta == null || e.gamma == null) return;
+    motion.got = true; motion.status = "on";
+    var b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
+    var x = Math.sin(g) * Math.cos(b), y = Math.sin(b), z = Math.abs(Math.cos(g) * Math.cos(b));
+    var a = -screenAngle(), ca = Math.cos(a), sa = Math.sin(a);
+    sensorG = { x: x * ca - y * sa, y: x * sa + y * ca, z: z };
+  }
+  function startMotion() {
+    if (motion.on) return;
+    motion.on = true; motion.status = "waiting";
+    window.addEventListener("deviceorientation", onOrient);
+    setTimeout(function () { if (!motion.got) { motion.status = "no data"; if (LAB) labStatus(); } }, 1500);
+    if (LAB) labStatus();
+  }
+  function askMotion() {
+    var D = window.DeviceOrientationEvent;
+    if (D && typeof D.requestPermission === "function") {
+      return D.requestPermission().then(function (r) {
+        if (r === "granted") { try { sessionStorage.setItem("water-motion", "1"); } catch (e) {} startMotion(); }
+        else { motion.status = "denied"; if (LAB) labStatus(); }
+        return r;
+      }).catch(function () { motion.status = "blocked"; if (LAB) labStatus(); });
+    }
+    startMotion();
+    return Promise.resolve("granted");
+  }
+  var touchy = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  if (!reduce && touchy && window.DeviceOrientationEvent) {
+    if (typeof DeviceOrientationEvent.requestPermission === "function") {
+      var asked = false;
+      try { asked = sessionStorage.getItem("water-motion") === "1"; } catch (e) {}
+      if (asked) {
+        // granted earlier this visit: renew quietly on the first tap
+        window.addEventListener("touchend", function once() { window.removeEventListener("touchend", once); askMotion(); });
+      } else {
+        var chip = document.createElement("button");
+        chip.className = "water-chip"; chip.type = "button"; chip.textContent = "Tilt your phone to move the water";
+        chip.addEventListener("click", function () { askMotion(); chip.remove(); });
+        document.body.appendChild(chip);
+      }
+    } else startMotion();
+  }
+
+  // ---------- renderer ----------
+  var VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+  var FS = [
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH", "precision highp float;", "#else", "precision mediump float;", "#endif",
+    "uniform sampler2D uH;uniform vec2 uRes,uGrid;uniform float uDpr,uCell,uTime,uClar,uFoam,uHMax;",
+    "float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}",
+    "float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}",
+    "float fbm(vec2 p){float a=.5,s=0.;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+17.1;a*=.5;}return s;}",
+    "float H(vec2 uv){float s=texture2D(uH,uv).r;return s*s*uHMax;}",
+    // light patterns dancing on the sea floor: where two drifting noise fields meet
+    "float caustic(vec2 p,float t){float a1=noise(p+vec2(t*.30,t*.20)),a2=noise(p*1.3-vec2(t*.25,-t*.15)+4.);",
+    "return pow(clamp(1.-abs(a1-a2)*3.,0.,1.),8.);}",
+    "void main(){",
+    " vec2 uv=vec2(gl_FragCoord.x/uRes.x,1.-gl_FragCoord.y/uRes.y);",
+    " vec4 s=texture2D(uH,uv);float h=s.r*s.r*uHMax;",
+    " if(h<.004){gl_FragColor=vec4(0.);return;}",
+    " vec2 px=gl_FragCoord.xy/uDpr;float t=uTime;vec2 q=px/90.;",
+    " float thr=.012+.012*fbm(q*1.3+vec2(t*.05,-t*.08));",
+    " float wet=smoothstep(thr,thr+.012,h);",
+    " if(wet<=0.){gl_FragColor=vec4(0.);return;}",
+    " vec2 tx=1./uGrid;",
+    " vec2 g=vec2(H(uv+vec2(tx.x,0.))-H(uv-vec2(tx.x,0.)),H(uv+vec2(0.,tx.y))-H(uv-vec2(0.,tx.y)))*.5;",
+    // estimated distance to the shoreline, in css px
+    " float distPx=h/max(length(g),1e-4)*uCell;",
+    " float lace=fbm(q*4.+vec2(t*.12,t*.05)+g*14.);",
+    " float foam=(1.-smoothstep(0.,14.+30.*lace,distPx))*smoothstep(.2,.5,lace+.2);",
+    // whitecaps only where the water is deep enough to churn
+    " foam=max(foam,smoothstep(.3,.9,s.a)*smoothstep(.42,.68,lace)*smoothstep(.12,.45,h));",
+    " foam=clamp(foam*uFoam,0.,1.);",
+    " vec2 o=q*2.2+vec2(t*.18,t*.11);",
+    " vec2 rn=vec2(fbm(o)-fbm(o+vec2(.06,0.)),fbm(o+9.)-fbm(o+vec2(9.,9.06)))*10.;",
+    " vec3 N=normalize(vec3(-g.x*5.+rn.x*.35,g.y*5.+rn.y*.35,1.));",
+    " vec3 L=normalize(vec3(-.35,.55,.75));",
+    " float spec=pow(max(dot(reflect(-L,N),vec3(0.,0.,1.)),0.),48.);",
+    " float depth=1.-exp(-h*1.7);",
+    " vec3 col=mix(vec3(.42,.88,.84),vec3(.10,.70,.78),smoothstep(0.,.5,depth));",
+    " col=mix(col,vec3(.03,.40,.56),smoothstep(.45,1.,depth));",
+    " col+=vec3(.85,1.,.95)*caustic(px/55.,t)*(1.-depth)*.35;",
+    " float a=uClar*(.16+.70*depth);",
+    " col+=spec*.9;a=max(a,spec*.7);",
+    " col=mix(col,vec3(.984,.953,.902),foam);a=mix(a,.92,foam);",
+    " a=clamp(a*wet,0.,.95);",
+    " gl_FragColor=vec4(col*a,a);",
+    "}"
+  ].join("\n");
+
+  function shader(type, src) {
+    var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  var prog;
+  try {
+    prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS));
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  } catch (err) { console.warn("[water]", err); canvas.remove(); return; }
+  gl.useProgram(prog);
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  var aLoc = gl.getAttribLocation(prog, "a");
+  gl.enableVertexAttribArray(aLoc);
+  gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
+  var U = {};
+  ["uH", "uRes", "uGrid", "uDpr", "uCell", "uTime", "uClar", "uFoam", "uHMax"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+  var texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(U.uH, 0);
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    var nc = Math.max(32, Math.min(180, Math.round(W / (W < 700 ? 8 : 9))));
+    var nr = Math.max(16, Math.round(H / (W / nc)));
+    if (nc !== cols || nr !== rows) buildGrid(nc, nr);
+    cellPx = W / cols;
+  }
+
+  function draw(time) {
+    for (var i = 0; i < N; i++) {
+      var e = Math.sqrt(Math.min(h[i] / HMAX, 1)) * 255;
+      tex8[i * 2] = e;
+      tex8[i * 2 + 1] = Math.min(255, ag[i] * 255);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE_ALPHA, cols, rows, 0, gl.LUMINANCE_ALPHA, gl.UNSIGNED_BYTE, tex8);
+    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform2f(U.uGrid, cols, rows);
+    gl.uniform1f(U.uDpr, dpr);
+    gl.uniform1f(U.uCell, cellPx);
+    gl.uniform1f(U.uTime, (time / 1000) % 600);
+    gl.uniform1f(U.uClar, S.clarity);
+    gl.uniform1f(U.uFoam, S.foam);
+    gl.uniform1f(U.uHMax, HMAX);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // churned water shows whitecaps
+  function updateAgitation(dt) {
+    var decay = Math.exp(-dt * 2.5), scale = 1 / (S.speed * rows * 0.35);
+    for (var y = 0, i = 0; y < rows; y++) for (var x = 0; x < cols; x++, i++) {
+      var fu = x < cols - 1 ? u[i] : 0, fv = y < rows - 1 ? v[i] : 0;
+      var vel = Math.sqrt(fu * fu + fv * fv) / (h[i] + 0.15) * scale;
+      var a = Math.min(1, Math.max(0, vel - 0.35));
+      ag[i] = Math.max(ag[i] * decay, a);
+    }
+  }
+
+  // ---------- frame loop ----------
+  var last = 0, raf = 0, surfClock = 2.5, surfPulse = 0, surfPhase = 0;
+  var fps = 60, frameCount = 0, fpsClock = 0;
+
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    var dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
+    last = now;
+    frameCount++; fpsClock += dt;
+    if (fpsClock > 0.5) { fps = frameCount / fpsClock; frameCount = 0; fpsClock = 0; if (LAB) labReadout(); }
+
+    // gravity source: lab tilt pad, then phone sensor, then straight down
+    var src = padG || sensorG || { x: 0, y: 1, z: 0 };
+    gravTarget = src;
+    var gk = Math.min(1, dt * 8);
+    grav.x += (gravTarget.x - grav.x) * gk;
+    grav.y += (gravTarget.y - grav.y) * gk;
+    grav.z += (gravTarget.z - grav.z) * gk;
+
+    // cursor and finger: only when over the water, harder with speed
+    if (ptr.fresh && now - ptr.t < 100) {
+      var cx = ptr.x / cellPx, cy = ptr.y / (H / rows);
+      var wetHere = depthAt(ptr.x, ptr.y) > 0.01 || depthAt(ptr.x, ptr.y + cellPx * 1.5) > 0.01;
+      if (wetHere) {
+        var vx = ptr.vx / cellPx, vy = ptr.vy / cellPx;
+        var spd = Math.sqrt(vx * vx + vy * vy), cap = 90;
+        if (spd > cap) { vx *= cap / spd; vy *= cap / spd; spd = cap; }
+        var r = Math.max(2, cols * 0.035) * (1 + spd / cap);
+        push(cx, cy, r, vx * 0.8 * S.cursor, vy * 0.8 * S.cursor, spd * 0.5 * S.cursor, dt);
+      }
+    }
+
+    // scrolling drags the water with the page, then it settles
+    var sy = window.scrollY, dy = sy - lastScrollY; lastScrollY = sy;
+    scrollVel += ((dy / Math.max(dt, 0.008)) - scrollVel) * 0.35;
+    if (Math.abs(scrollVel) > 5 && S.scroll > 0) {
+      var sv = Math.max(-3000, Math.min(3000, scrollVel)) / cellPx * S.scroll;
+      var kk = dt * 0.9;
+      for (var y = 0, i = 0; y < rows; y++) for (var x = 0; x < cols; x++, i++) {
+        if (h[i] <= 0) continue;
+        var d = Math.min(h[i], 1.2);
+        v[i] -= kk * sv * d;
+        u[i] += kk * sv * d * 0.35 * Math.sin(x / cols * 9.4 + surfPhase);
+      }
+    }
+
+    // surf: a swell every few seconds runs up the shore and drains back
+    if (S.surf > 0) {
+      surfClock -= dt;
+      if (surfClock <= 0) { surfPulse = 0.45; surfPhase = Math.random() * 6.28; surfClock = 4 + Math.random() * 3; }
+      if (surfPulse > 0) {
+        surfPulse -= dt;
+        var gl2 = Math.sqrt(grav.x * grav.x + grav.y * grav.y);
+        if (gl2 > 0.2) {
+          var ux = -grav.x / gl2, uy = -grav.y / gl2, amp = S.surf * S.speed * rows * 0.9 * dt;
+          for (var y3 = 0, j = 0; y3 < rows; y3++) for (var x3 = 0; x3 < cols; x3++, j++) {
+            if (h[j] <= 0) continue;
+            var along = 0.65 + 0.35 * Math.sin(x3 / cols * 6.0 + y3 / rows * 6.0 + surfPhase);
+            var dd = Math.min(h[j], 1) * amp * along;
+            u[j] += ux * dd; v[j] += uy * dd;
+          }
+        }
+      }
+    }
+
+    // stable sub-steps
+    var c = S.speed * rows * Math.sqrt(2 * grav.z + 1) * 1.6;
+    var n = Math.max(1, Math.ceil(dt * c / 0.45));
+    for (var s = 0; s < n; s++) step(dt / n);
+    normalize();
+    updateAgitation(dt);
+    draw(now);
+  }
+
+  function start() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
+  function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+  document.addEventListener("visibilitychange", function () { document.hidden ? stop() : start(); });
+
+  var resizeQueued = false;
+  window.addEventListener("resize", function () {
+    if (resizeQueued) return; resizeQueued = true;
+    requestAnimationFrame(function () { resizeQueued = false; resize(); if (reduce) draw(0); });
+  });
+
+  resize();
+  if (reduce) draw(0); else start();
+
+  // ---------- lab panel ----------
+  var lab = {};
+  function labStatus() {
+    if (!lab.motion) return;
+    var m = { off: "Motion: off", waiting: "Motion: waiting for data", on: "Motion: live from your phone", "no data": "Motion: no data (blocked here, use the tilt pad)", denied: "Motion: permission declined", blocked: "Motion: blocked here, use the tilt pad" };
+    lab.motion.textContent = m[motion.status] || motion.status;
+  }
+  function labReadout() {
+    if (!lab.read) return;
+    lab.read.textContent = Math.round(fps) + " fps · grid " + cols + "×" + rows + " · volume drift " + (drift * 100).toFixed(3) + "% · gravity " + grav.x.toFixed(2) + ", " + grav.y.toFixed(2) + ", flat " + grav.z.toFixed(2);
+  }
+  if (LAB && !reduce) buildLab();
+
+  function buildLab() {
+    var st = document.createElement("style");
+    st.textContent =
+      ".wl-toggle{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));top:calc(50% - 22px);z-index:62;font:600 13px var(--sans,system-ui);background:#1F2E3A;color:#FBF3E6;border:0;border-radius:999px;padding:10px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(31,46,58,.3)}" +
+      ".wl{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));top:calc(64px + env(safe-area-inset-top,0px));z-index:63;width:min(300px,calc(100vw - 24px));max-height:calc(100% - 96px);overflow:auto;background:#FBF3E6;color:#1F2E3A;border-radius:16px;padding:16px;font:14px var(--sans,system-ui);box-shadow:0 10px 40px rgba(31,46,58,.35)}" +
+      ".wl-top{display:flex;justify-content:space-between;align-items:center;gap:8px}" +
+      ".wl button.b{font:600 13px var(--sans,system-ui);border:1px solid #1F2E3A;background:transparent;color:#1F2E3A;border-radius:999px;padding:7px 12px;cursor:pointer}" +
+      ".wl h2{margin:0 0 4px;font:400 22px var(--display,Georgia,serif);color:#C4561A}" +
+      ".wl p{margin:0 0 12px;color:#3B4A55;font-size:13px}" +
+      ".wl label{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:0 0 10px;font-weight:600;font-size:13px}" +
+      ".wl label span{font-variant-numeric:tabular-nums;color:#6E5236;font-weight:500}" +
+      ".wl input[type=range]{grid-column:1/-1;width:100%;accent-color:#E8772A}" +
+      ".wl .pad{position:relative;width:132px;height:132px;margin:4px auto 8px;border-radius:50%;background:radial-gradient(circle,#8CCBE8 0,#4A9FCF 100%);touch-action:none;cursor:grab}" +
+      ".wl .pad i{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#FBF3E6;border:3px solid #1F2E3A;pointer-events:none}" +
+      ".wl .row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}" +
+      ".wl button.b{font:600 13px var(--sans,system-ui);border:1px solid #1F2E3A;background:transparent;color:#1F2E3A;border-radius:999px;padding:7px 12px;cursor:pointer}" +
+      ".wl .read{font-size:12px;color:#3B4A55;font-variant-numeric:tabular-nums;margin:8px 0 0}" +
+      ".wl .sub{font-weight:600;font-size:13px;margin:12px 0 2px}" +
+      ".wl textarea{width:100%;height:90px;font:12px ui-monospace,monospace;margin-top:6px}";
+    document.head.appendChild(st);
+
+    var open = false;
+    try { open = sessionStorage.getItem("water-lab-open") === "1"; } catch (e) {}
+    var tog = document.createElement("button");
+    tog.type = "button"; tog.className = "wl-toggle"; tog.textContent = "Water lab";
+    var panel = document.createElement("div");
+    panel.className = "wl"; panel.hidden = !open;
+    panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Water lab settings");
+    panel.innerHTML = "<div class=\"wl-top\"><h2>Water lab</h2><button type=\"button\" class=\"b\">Close</button></div><p>Tune the water, then tap Copy settings and paste them to Claude.</p>";
+    function setOpen(o) {
+      panel.hidden = !o; tog.hidden = o;
+      try { sessionStorage.setItem("water-lab-open", o ? "1" : "0"); } catch (e) {}
+    }
+    tog.hidden = open;
+    tog.addEventListener("click", function () { setOpen(true); });
+    panel.querySelector(".wl-top button").addEventListener("click", function () { setOpen(false); });
+
+    function save() { try { localStorage.setItem("water-lab", JSON.stringify(S)); } catch (e) {} }
+    var sliders = [
+      ["level", "Water level", 0.05, 0.4, 0.01, function (x) { return Math.round(x * 100) + "%"; }],
+      ["clarity", "Opacity", 0.3, 1.4, 0.05],
+      ["foam", "Foam", 0, 1.6, 0.05],
+      ["cursor", "Cursor and finger", 0, 2.5, 0.05],
+      ["scroll", "Scroll slosh", 0, 2.5, 0.05],
+      ["calm", "Settling speed", 0.2, 3, 0.05],
+      ["surf", "Surf", 0, 1.5, 0.05],
+      ["speed", "Wave speed", 0.25, 1, 0.05]
+    ];
+    sliders.forEach(function (d) {
+      var key = d[0], fmt = d[5] || function (x) { return (+x).toFixed(2); };
+      var lb = document.createElement("label");
+      var id = "wl-" + key;
+      lb.htmlFor = id;
+      lb.innerHTML = d[1] + "<span></span><input type=\"range\" id=\"" + id + "\" min=\"" + d[2] + "\" max=\"" + d[3] + "\" step=\"" + d[4] + "\">";
+      var out = lb.querySelector("span"), inp = lb.querySelector("input");
+      inp.value = S[key]; out.textContent = fmt(S[key]);
+      inp.addEventListener("input", function () {
+        S[key] = +inp.value; out.textContent = fmt(S[key]);
+        if (key === "level") { volume = targetVolume(); }
+        save();
+      });
+      panel.appendChild(lb);
+    });
+
+    var sub = document.createElement("div"); sub.className = "sub"; sub.textContent = "Tilt pad (stands in for your phone)";
+    panel.appendChild(sub);
+    var hint = document.createElement("p");
+    hint.textContent = "The dot shows which way is down. Drag it to the centre to lay the phone flat.";
+    panel.appendChild(hint);
+    var pad = document.createElement("div"); pad.className = "pad";
+    var dot = document.createElement("i"); pad.appendChild(dot);
+    panel.appendChild(pad);
+    function placeDot(gx, gy) { dot.style.left = (50 + gx * 50) + "%"; dot.style.top = (50 + gy * 50) + "%"; }
+    placeDot(0, 1);
+    function padMove(e) {
+      var r = pad.getBoundingClientRect();
+      var x = ((e.clientX - r.left) / r.width) * 2 - 1, y = ((e.clientY - r.top) / r.height) * 2 - 1;
+      var l = Math.sqrt(x * x + y * y);
+      if (l > 1) { x /= l; y /= l; l = 1; }
+      padG = { x: x, y: y, z: Math.sqrt(Math.max(0, 1 - l * l)) };
+      placeDot(x, y);
+    }
+    pad.addEventListener("pointerdown", function (e) { pad.setPointerCapture(e.pointerId); padMove(e); });
+    pad.addEventListener("pointermove", function (e) { if (pad.hasPointerCapture(e.pointerId)) padMove(e); });
+
+    var row = document.createElement("div"); row.className = "row";
+    function btn(label, fn) { var b = document.createElement("button"); b.type = "button"; b.className = "b"; b.textContent = label; b.addEventListener("click", fn); row.appendChild(b); return b; }
+    btn("Upright", function () { padG = null; placeDot(0, 1); });
+    btn("Lay flat", function () { padG = { x: 0, y: 0, z: 1 }; placeDot(0, 0); });
+    btn("Use phone motion", function () { padG = null; placeDot(0, 1); askMotion(); });
+    panel.appendChild(row);
+    lab.motion = document.createElement("p"); panel.appendChild(lab.motion); labStatus();
+
+    var row2 = document.createElement("div"); row2.className = "row"; panel.appendChild(row2);
+    row = row2;
+    btn("Copy settings", function () {
+      var txt = JSON.stringify(S);
+      var done = function () { copyBtn.textContent = "Copied"; setTimeout(function () { copyBtn.textContent = "Copy settings"; }, 1500); };
+      var fallback = function () { var ta = panel.querySelector("textarea") || panel.appendChild(document.createElement("textarea")); ta.value = txt; ta.select(); };
+      try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+    });
+    var copyBtn = row2.lastChild;
+    btn("Reset", function () {
+      try { localStorage.removeItem("water-lab"); } catch (e) {}
+      location.reload();
+    });
+    lab.read = document.createElement("p"); lab.read.className = "read"; panel.appendChild(lab.read);
+
+    document.body.appendChild(tog);
+    document.body.appendChild(panel);
+  }
+})();
