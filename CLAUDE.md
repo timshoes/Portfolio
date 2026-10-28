@@ -15,7 +15,7 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 
 ## Working rules
 - Keep changes surgical and match the existing hand-written HTML/CSS style.
-- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 19 pages.
+- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 20 pages.
 - Home page order: 360 hero (card under the video; buttons to Work and About), Leadership, then one image
   per category (Brand, Product & UX, Web, Immersive, AI & Rapid Prototyping) linking to `work.html#<category>`.
 - `work.html` lists every project; its filter shows one category at a time from the URL hash. The
