@@ -238,7 +238,7 @@
   var VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
   var FS = [
     "#ifdef GL_FRAGMENT_PRECISION_HIGH", "precision highp float;", "#else", "precision mediump float;", "#endif",
-    "uniform sampler2D uH;uniform vec2 uRes,uGrid;uniform float uOver,uCanH,uDpr,uCell,uTime,uClar,uFoam,uHMax;",
+    "uniform sampler2D uH;uniform vec2 uRes,uGrid;uniform float uOver,uCanH,uDpr,uCell,uTime,uAct,uClar,uFoam,uHMax;",
     "float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}",
     "float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}",
     "float fbm(vec2 p){float a=.5,s=0.;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+17.1;a*=.5;}return s;}",
@@ -272,7 +272,9 @@
     " vec2 o1=q*2.2+vec2(t*.18,t*.11),o2=q*5.5+vec2(-t*.35,t*.22);",
     " vec2 rn=vec2(fbm(o1)-fbm(o1+vec2(.06,0.)),fbm(o1+9.)-fbm(o1+vec2(9.,9.06)))*10.;",
     " vec2 rf=vec2(noise(o2)-noise(o2+vec2(.08,0.)),noise(o2+5.)-noise(o2+vec2(5.,5.08)))*6.;",
-    " vec2 rip=(rn*.35+rf*.25)*(.4+.6*calm);",
+    // at rest the surface is nearly still; ripples build up only while the water is moving
+    " float live=max(uAct,s.g);",
+    " vec2 rip=(rn*.35+rf*.25)*(.4+.6*calm)*(.2+.8*live);",
     " vec3 N=normalize(vec3(-g.x*5.+rip.x,g.y*5.+rip.y,1.));",
     // light absorbed by depth: red fades first, so shallows read turquoise and deep water blue
     " vec3 T=exp(-vec3(2.4,.75,.5)*h*1.3);",
@@ -286,7 +288,7 @@
     " col=mix(col,vec3(.80,.93,1.),clamp(.03+.6*pow(1.-N.z,1.5),0.,.5));",
     // sun: a broad sheen and sharp glints on the ripples
     " vec3 R=reflect(-normalize(vec3(-.35,.55,.75)),N);",
-    " float sheen=pow(max(R.z,0.),20.)*.15,glint=pow(max(R.z,0.),220.)*1.6*(.5+.5*calm);",
+    " float sheen=pow(max(R.z,0.),20.)*.15,glint=pow(max(R.z,0.),220.)*1.6*(.5+.5*calm)*(.15+.85*live);",
     " float a=uClar*(.14+.72*(1.-tr));",
     " col+=sheen+glint;a=max(a,min(glint,1.)*.8);",
     " col=mix(col,vec3(.984,.953,.902),foam);a=mix(a,.92,foam);",
@@ -317,7 +319,7 @@
   gl.enableVertexAttribArray(aLoc);
   gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
   var U = {};
-  ["uH", "uRes", "uOver", "uCanH", "uGrid", "uDpr", "uCell", "uTime", "uClar", "uFoam", "uHMax"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+  ["uH", "uRes", "uOver", "uCanH", "uGrid", "uDpr", "uCell", "uTime", "uAct", "uClar", "uFoam", "uHMax"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
   var texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -356,7 +358,8 @@
     gl.uniform2f(U.uGrid, cols, rows);
     gl.uniform1f(U.uDpr, dpr);
     gl.uniform1f(U.uCell, cellPx);
-    gl.uniform1f(U.uTime, (time / 1000) % 600);
+    gl.uniform1f(U.uTime, flow % 600);
+    gl.uniform1f(U.uAct, act);
     gl.uniform1f(U.uClar, S.clarity);
     gl.uniform1f(U.uFoam, S.foam);
     gl.uniform1f(U.uHMax, HMAX);
@@ -366,15 +369,22 @@
   }
 
   // churned water shows whitecaps; spots the water just left stay dark (wet sand) for a moment
+  // also measures how much the water is moving overall (act, 0..1): at rest the shading slows and calms
   function updateAgitation(dt) {
     var decay = Math.exp(-dt * 2.5), dry = Math.exp(-dt / 1.8), scale = 1 / (S.speed * rows * 0.35);
+    var flowSum = 0, hSum = 0;
     for (var y = 0, i = 0; y < rows; y++) for (var x = 0; x < cols; x++, i++) {
       var fu = x < cols - 1 ? u[i] : 0, fv = y < rows - 1 ? v[i] : 0;
       var vel = Math.sqrt(fu * fu + fv * fv) / (h[i] + 0.15) * scale;
+      flowSum += Math.sqrt(fu * fu + fv * fv); hSum += h[i];
       var a = Math.min(1, Math.max(0, vel - 0.35));
       ag[i] = Math.max(ag[i] * decay, a);
       wm[i] = h[i] > 0.02 ? 1 : wm[i] * dry;
     }
+    // average speed weighted by depth, so a thin film draining down the screen barely counts
+    var target = Math.min(1, flowSum / Math.max(1e-6, hSum) * scale * ACT_GAIN);
+    act += (target - act) * Math.min(1, dt * (target > act ? 6 : 1.2));
+    flow += dt * (0.12 + 0.88 * act);
   }
 
   // ---------- page bending under the water ----------
@@ -386,7 +396,7 @@
     var svg = document.createElementNS(NS, "svg");
     svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
     svg.style.position = "absolute";
-    svg.innerHTML = '<filter id="water-bend" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4"><animate attributeName="baseFrequency" dur="7s" values="0.012 0.04;0.015 0.034;0.012 0.04" repeatCount="indefinite"/></feTurbulence><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/></filter>';
+    svg.innerHTML = '<filter id="water-bend" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4"><animate attributeName="baseFrequency" dur="24s" values="0.012 0.04;0.013 0.037;0.012 0.04" repeatCount="indefinite"/></feTurbulence><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/></filter>';
     document.body.appendChild(svg);
     var layer = document.createElement("div");
     layer.setAttribute("aria-hidden", "true");
@@ -409,11 +419,12 @@
     var clip = "polygon(0 100%," + pts.join(",") + ",100% " + pts[pts.length - 1].split(" ")[1] + ",100% 100%)";
     if (clip !== bend.clip) { bend.layer.style.clipPath = clip; bend.layer.style.display = "block"; bend.clip = clip; }
     // thin water bends the page less
-    var sc = Math.round(16 * S.bend * Math.min(1, Math.max(0.2, (wetSum / Math.max(1, wetN)) / 0.5)));
+    var sc = Math.round(16 * S.bend * Math.min(1, Math.max(0.2, (wetSum / Math.max(1, wetN)) / 0.5)) * (0.12 + 0.88 * act));
     if (sc !== bend.scale) { bend.map.setAttribute("scale", sc); bend.scale = sc; }
   }
 
   // ---------- frame loop ----------
+  var ACT_GAIN = 8, act = 0, flow = 0;
   var last = 0, raf = 0, surfClock = 2.5, surfPulse = 0, surfPhase = 0;
   var fps = 60, frameCount = 0, fpsClock = 0;
 
@@ -510,7 +521,7 @@
   }
   function labReadout() {
     if (!lab.read) return;
-    lab.read.textContent = Math.round(fps) + " fps · grid " + cols + "×" + rows + " · volume drift " + (drift * 100).toFixed(3) + "% · gravity " + grav.x.toFixed(2) + ", " + grav.y.toFixed(2) + ", flat " + grav.z.toFixed(2);
+    lab.read.textContent = Math.round(fps) + " fps · grid " + cols + "×" + rows + " · volume drift " + (drift * 100).toFixed(3) + "% · gravity " + grav.x.toFixed(2) + ", " + grav.y.toFixed(2) + ", flat " + grav.z.toFixed(2) + " · activity " + act.toFixed(2);
   }
   if (LAB && !reduce) buildLab();
 
