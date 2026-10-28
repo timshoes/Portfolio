@@ -263,9 +263,11 @@
     // estimated distance to the shoreline, in css px
     " float distPx=h/max(length(g),1e-4)*uCell;",
     " float lace=fbm(q*4.+vec2(t*.12,t*.05)+g*14.);",
-    " float foam=(1.-smoothstep(0.,14.+30.*lace,distPx))*smoothstep(.2,.5,lace+.2);",
+    // shoreline foam comes from motion: a wave or a splash whips it up, and it fades away as the water rests
+    " float stir=clamp(max(uAct*2.5,s.g),0.,1.);",
+    " float foam=(1.-smoothstep(0.,(6.+30.*lace)*(.4+.6*stir),distPx))*smoothstep(.2,.5,lace+.2)*(.08+.92*stir);",
     // whitecaps only where the water is deep enough to churn
-    " foam=max(foam,smoothstep(.3,.9,s.g)*smoothstep(.42,.68,lace)*smoothstep(.12,.45,h));",
+    " foam=max(foam,smoothstep(.55,1.,s.g)*smoothstep(.42,.68,lace)*smoothstep(.12,.45,h));",
     " foam=clamp(foam*uFoam,0.,1.);",
     // surface: slow swell plus fine ripples, calmer where the water is thin
     " float calm=smoothstep(.02,.35,h);",
@@ -377,7 +379,7 @@
       var fu = x < cols - 1 ? u[i] : 0, fv = y < rows - 1 ? v[i] : 0;
       var vel = Math.sqrt(fu * fu + fv * fv) / (h[i] + 0.15) * scale;
       flowSum += Math.sqrt(fu * fu + fv * fv); hSum += h[i];
-      var a = Math.min(1, Math.max(0, vel - 0.35));
+      var a = Math.min(1, vel * 1.2);   // local motion: drives foam, whitecaps and ripples
       ag[i] = Math.max(ag[i] * decay, a);
       wm[i] = h[i] > 0.02 ? 1 : wm[i] * dry;
     }
