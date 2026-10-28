@@ -547,7 +547,14 @@
   function buildLab() {
     var st = document.createElement("style");
     st.textContent =
-      ".wl-toggle{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));top:calc(50% - 22px);z-index:62;font:600 13px var(--sans,system-ui);background:#1F2E3A;color:#FBF3E6;border:0;border-radius:999px;padding:10px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(31,46,58,.3)}" +
+      // the way in to the settings: big, warm and gently pulsing so visitors notice it
+      ".wl-toggle{position:fixed;right:calc(14px + env(safe-area-inset-right,0px));top:calc(50% - 28px);z-index:62;display:flex;align-items:center;gap:10px;font:700 16px var(--sans,system-ui);background:#E8772A;color:#1F2E3A;border:3px solid #FBF3E6;border-radius:999px;padding:13px 20px 13px 16px;cursor:pointer;box-shadow:0 8px 24px rgba(31,46,58,.35)}" +
+      ".wl-toggle:hover{background:#F5A04E}" +
+      ".wl-toggle svg{width:24px;height:24px;flex:none}" +
+      ".wl-toggle::after{content:\"\";position:absolute;inset:-3px;border-radius:999px;border:3px solid #E8772A;animation:wl-pulse 2.4s ease-out infinite;pointer-events:none}" +
+      "@keyframes wl-pulse{0%{transform:scale(1);opacity:.8}100%{transform:scale(1.25,1.6);opacity:0}}" +
+      "@media (prefers-reduced-motion:reduce){.wl-toggle::after{animation:none;opacity:0}}" +
+      "@media (max-width:700px){.wl-toggle{top:auto;right:auto;left:50%;transform:translateX(-50%);bottom:calc(18vh + 64px + env(safe-area-inset-bottom,0px));white-space:nowrap}}" +
       ".wl{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));top:calc(64px + env(safe-area-inset-top,0px));z-index:63;width:min(300px,calc(100vw - 24px));max-height:calc(100% - 96px);overflow:auto;background:#FBF3E6;color:#1F2E3A;border-radius:16px;padding:16px;font:14px var(--sans,system-ui);box-shadow:0 10px 40px rgba(31,46,58,.35)}" +
       ".wl-top{display:flex;justify-content:space-between;align-items:center;gap:8px}" +
       ".wl button.b{font:600 13px var(--sans,system-ui);border:1px solid #1F2E3A;background:transparent;color:#1F2E3A;border-radius:999px;padding:7px 12px;cursor:pointer}" +
@@ -568,7 +575,8 @@
     var open = window.innerWidth >= 900;
     try { var o = sessionStorage.getItem("water-lab-open"); if (o) open = o === "1"; } catch (e) {}
     var tog = document.createElement("button");
-    tog.type = "button"; tog.className = "wl-toggle"; tog.textContent = "Water lab";
+    tog.type = "button"; tog.className = "wl-toggle";
+    tog.innerHTML = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M2 9c2.5-2.5 4.5-2.5 7 0s4.5 2.5 7 0 4.5-2.5 6 0\"/><path d=\"M2 16c2.5-2.5 4.5-2.5 7 0s4.5 2.5 7 0 4.5-2.5 6 0\"/></svg><span>Make your own waves</span>";
     var panel = document.createElement("div");
     panel.className = "wl"; panel.hidden = !open;
     panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Water lab settings");
