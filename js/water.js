@@ -28,6 +28,7 @@
     surf: 0.6,     // incoming waves running up the shore
     speed: 0.55    // wave speed, screen heights per second
   };
+  var lab = {};   // lab panel elements; declared early because motion can start before the panel is built
   if (LAB) try { var saved = JSON.parse(localStorage.getItem("water-lab") || "{}"); for (var k in saved) if (k in S) S[k] = +saved[k]; } catch (e) {}
 
   // ---------- page layer ----------
@@ -440,7 +441,6 @@
   if (reduce) draw(0); else start();
 
   // ---------- lab panel ----------
-  var lab = {};
   function labStatus() {
     if (!lab.motion) return;
     var m = { off: "Motion: off", waiting: "Motion: waiting for data", on: "Motion: live from your phone", "no data": "Motion: no data (blocked here, use the tilt pad)", denied: "Motion: permission declined", blocked: "Motion: blocked here, use the tilt pad" };
