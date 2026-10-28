@@ -186,34 +186,6 @@ blockquote cite { display: block; margin-top: 10px; font-style: normal; font-siz
 .p-logos img { width: 90%; height: 90%; object-fit: contain; }
 @media (max-width: 600px) { .clients ul { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } }
 
-/* wave page transition: one image of real surf scales up the page, then slides back down to the sea.
-   ocean-wave.webp is 1600x1036 shown 106vw wide (~69vw tall): the foam edge is see-through, the water is solid from ~58vw down
-   and fades out at the bottom over ocean-deep.webp, a seamless water tile that only starts at 61vw (::after), so nothing shows behind the foam. */
-.wash { position: fixed; inset: 0; z-index: 100; pointer-events: none; overflow: hidden; visibility: hidden; }
-.wash .w { position: absolute; left: -3vw; top: 0; width: 106vw; height: calc(100vh + 66vw); transform: translateY(102vh); transform-origin: 50% 0; will-change: transform; }
-.wash .w-sea::after { content: ""; position: absolute; left: 0; right: 0; top: 61vw; bottom: 0; background: url(../img/ocean-deep.webp) left top / 1100px auto repeat; }
-.wash .w-foam { position: absolute; inset: 0; z-index: 1; background: url(../img/ocean-wave.webp) center top / 100% auto no-repeat; }
-/* the ripple warps the whole sea: foam edge and the water below */
-.wash .w-sea { filter: url(#surf); }
-.wash-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-html.wash-out .wash, html.wash-in .wash { visibility: visible; pointer-events: auto; }
-/* leaving: the surf eases in and stretches up (to 1.4x) until its foam just reaches the top of the page (1.1s),
-   then keeps creeping so it never sits still while the next page loads. Opacity fades 15% -> 100% coming in, 100% -> 15% draining. Stretch is vertical only, from the foam edge down. */
-@keyframes wash-rise {
-  0%   { transform: translateY(102vh) scaleY(1); opacity: .15; animation-timing-function: cubic-bezier(.42,0,.45,1); }
-  60%  { transform: translateY(-60vw) scaleY(1.4); opacity: 1; animation-timing-function: linear; }
-  100% { transform: translateY(-64vw) scaleY(1.45); opacity: 1; }
-}
-/* arriving: picks up from about where the water was, then pulls back and relaxes to its normal height as it drains (0.92s) */
-@keyframes wash-fall {
-  0%   { transform: translateY(-61vw) scaleY(1.42); opacity: 1; animation-timing-function: cubic-bezier(.35,0,.25,1); }
-  100% { transform: translateY(102vh) scaleY(1); opacity: .15; }
-}
-html.wash-out .wash .w { animation: wash-rise 1.84s forwards; }
-html.wash-in .wash .w { transform: translateY(-61vw) scaleY(1.42); opacity: 1; }
-html.wash-in.wash-go .wash .w { animation: wash-fall .92s forwards; }
-@media (prefers-reduced-motion: reduce) { .wash { display: none; } }
-
 /* 360 hero banner */
 .hero.hero-360 { position: relative; padding: 0; min-height: min(86vh, 860px); display: flex; align-items: flex-end; overflow: hidden; background: var(--sky); }
 .pano { position: absolute; inset: 0; background: var(--sky) center / cover no-repeat; }
