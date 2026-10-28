@@ -1,6 +1,7 @@
 # Tim Howes portfolio — timhowes.me
 
-Static HTML site: no build step, no framework. Pages are `index.html`, `about.html` and `work/*.html`;
+Static HTML site: no build step, no framework. Pages are `index.html` (home), `work.html` (all projects,
+filterable by category), `about.html` and `work/*.html` (one case study each);
 shared styles in `css/site.css`; scripts in `js/`. Brand tokens are the CSS custom properties at the top
 of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 
@@ -14,8 +15,15 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 
 ## Working rules
 - Keep changes surgical and match the existing hand-written HTML/CSS style.
-- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 15
-  pages (`work/ruscella-immersive-website.html` is only a redirect).
+- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 19 pages.
+- Home page order: 360 hero (card under the video; buttons to Work and About), Leadership, then one image
+  per category (Brand, Product & UX, Web, Immersive, AI & Rapid Prototyping) linking to `work.html#<category>`.
+- `work.html` lists every project; its filter shows one category at a time from the URL hash. The
+  "Next project" chain on case studies follows the same order. Use facts from the case studies; never
+  invent results.
+- Brand case studies share one simple layout (AccessVR is the template): top, Challenge/Solution, My role,
+  a page-through Style guide, one Highlight image, no Results.
+- Page-through viewers: `<div class="flip" data-flip>` with one `<figure>` per page, plus `js/flip.js`.
 - Links between pages are relative (`../` from `work/`).
 - Respect `prefers-reduced-motion` in anything animated.
 - Commit with clear messages and push; tell Tim the preview or live URL to check.
