@@ -1,6 +1,7 @@
 # Tim Howes portfolio — timhowes.me
 
-Static HTML site: no build step, no framework. Pages are `index.html`, `about.html` and `work/*.html`;
+Static HTML site: no build step, no framework. Pages are `index.html` (home: the story), `work.html`
+(all projects by category), `about.html` and `work/*.html` (one case study each);
 shared styles in `css/site.css`; scripts in `js/`. Brand tokens are the CSS custom properties at the top
 of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 
@@ -14,8 +15,12 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 
 ## Working rules
 - Keep changes surgical and match the existing hand-written HTML/CSS style.
-- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 15
+- Every page repeats the same `<head>` and header/footer markup; when changing one, change all 17
   pages (`work/ruscella-immersive-website.html` is only a redirect).
+- The home page tells Tim's story as five "waves" of technology (web, mobile and product, Agile teams,
+  immersive, generative AI), one standout project each, then two ways in: hire Tim, or work with him
+  through Ruscella Immersive. New projects go on `work.html`; only feature one on the home page if it
+  is the best example of its wave. Use facts from the case studies; never invent results.
 - Links between pages are relative (`../` from `work/`).
 - Respect `prefers-reduced-motion` in anything animated.
 - Commit with clear messages and push; tell Tim the preview or live URL to check.
