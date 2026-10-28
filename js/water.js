@@ -196,7 +196,10 @@
     var b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
     var x = Math.sin(g) * Math.cos(b), y = Math.sin(b), z = Math.abs(Math.cos(g) * Math.cos(b));
     var a = -screenAngle(), ca = Math.cos(a), sa = Math.sin(a);
-    sensorG = { x: x * ca - y * sa, y: x * sa + y * ca, z: z };
+    var gx = x * ca - y * sa, gy = x * sa + y * ca;
+    // ignore hand tremor: only changes of more than a few degrees move the water
+    if (sensorG && Math.abs(gx - sensorG.x) + Math.abs(gy - sensorG.y) + Math.abs(z - sensorG.z) < 0.06) return;
+    sensorG = { x: gx, y: gy, z: z };
   }
   function startMotion() {
     if (motion.on) return;
@@ -398,30 +401,44 @@
     var svg = document.createElementNS(NS, "svg");
     svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
     svg.style.position = "absolute";
-    svg.innerHTML = '<filter id="water-bend" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4"><animate attributeName="baseFrequency" dur="24s" values="0.012 0.04;0.013 0.037;0.012 0.04" repeatCount="indefinite"/></feTurbulence><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/></filter>';
+    svg.innerHTML = '<filter id="water-bend" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/></filter>';
     document.body.appendChild(svg);
     var layer = document.createElement("div");
     layer.setAttribute("aria-hidden", "true");
     layer.style.cssText = "position:fixed;left:0;top:-" + OVER + "px;width:100%;height:calc(100% + " + 2 * OVER + "px);z-index:49;pointer-events:none;backdrop-filter:url(#water-bend);display:none";
     document.body.appendChild(layer);
-    bend = { layer: layer, map: svg.querySelector("feDisplacementMap"), clip: "", scale: -1, tick: 0 };
+    bend = { layer: layer, map: svg.querySelector("feDisplacementMap"), clip: "", scale: -1, sc: 0, tops: [], tick: 0 };
   }
+  // The bending pattern itself is still; only its strength and outline follow the water, both eased,
+  // so text under calm water holds steady.
   function updateBend() {
-    if (!bend || ++bend.tick % 3) return;
+    if (!bend || ++bend.tick % 2) return;
     if (S.bend <= 0) { if (bend.clip !== "off") { bend.layer.style.display = "none"; bend.clip = "off"; } return; }
-    // outline: the topmost wet cell in every few columns, in layer pixels
-    var rowPx = H / rows, step = Math.max(1, Math.round(cols / 40)), pts = [], wetSum = 0, wetN = 0, any = false;
-    for (var x = 0; x < cols; x += step) {
+    // outline: where each sampled column first gets wet, between rows rather than on them, eased over time
+    var rowPx = H / rows, step = Math.max(1, Math.round(cols / 40)), pts = [], wetSum = 0, wetN = 0, any = false, WET = 0.02;
+    for (var x = 0, k = 0; x < cols; x += step, k++) {
       var top = H + OVER;
-      for (var y = 0; y < rows; y++) if (h[y * cols + x] > 0.03) { top = y * rowPx; any = true; break; }
-      pts.push(Math.round(x * cellPx) + "px " + Math.round(top + OVER) + "px");
+      for (var y = 0; y < rows; y++) {
+        var hv = h[y * cols + x];
+        if (hv > WET) {
+          var above = y > 0 ? h[(y - 1) * cols + x] : hv;
+          top = (y - 1 + (hv > above ? (WET - above) / (hv - above) : 1) + 0.5) * rowPx;
+          any = true; break;
+        }
+      }
+      var prev = bend.tops[k];
+      bend.tops[k] = prev == null || Math.abs(top - prev) > H * 0.5 ? top : prev + (top - prev) * 0.35;
+      pts.push(Math.round(x * cellPx) + "px " + Math.round(bend.tops[k] + OVER) + "px");
     }
+    bend.tops.length = k;
     for (var i = 0; i < N; i += 7) if (h[i] > 0.03) { wetSum += h[i]; wetN++; }
     if (!any) { if (bend.clip !== "none") { bend.layer.style.display = "none"; bend.clip = "none"; } return; }
     var clip = "polygon(0 100%," + pts.join(",") + ",100% " + pts[pts.length - 1].split(" ")[1] + ",100% 100%)";
     if (clip !== bend.clip) { bend.layer.style.clipPath = clip; bend.layer.style.display = "block"; bend.clip = clip; }
     // thin water bends the page less
-    var sc = Math.round(16 * S.bend * Math.min(1, Math.max(0.2, (wetSum / Math.max(1, wetN)) / 0.5)) * (0.12 + 0.88 * act));
+    var target = 16 * S.bend * Math.min(1, Math.max(0.2, (wetSum / Math.max(1, wetN)) / 0.5)) * (0.25 + 0.75 * act);
+    bend.sc += (target - bend.sc) * 0.15;
+    var sc = Math.round(bend.sc * 2) / 2;
     if (sc !== bend.scale) { bend.map.setAttribute("scale", sc); bend.scale = sc; }
   }
 
@@ -441,7 +458,7 @@
     // gravity source: lab tilt pad, then phone sensor, then straight down
     var src = padG || sensorG || { x: 0, y: 1, z: 0 };
     gravTarget = src;
-    var gk = Math.min(1, dt * 8);
+    var gk = Math.min(1, dt * (padG ? 8 : 2));   // the phone sensor is eased more gently than the lab tilt pad
     grav.x += (gravTarget.x - grav.x) * gk;
     grav.y += (gravTarget.y - grav.y) * gk;
     grav.z += (gravTarget.z - grav.z) * gk;
