@@ -8,6 +8,14 @@
   var script = document.currentScript;
   var LAB = !!(script && script.hasAttribute("data-lab"));
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (LAB) window.addEventListener("error", function (e) {
+    // lab only: put crashes on screen so they can be reported from a phone
+    if (!e.filename || e.filename.indexOf("water.js") < 0) return;
+    var note = document.createElement("p");
+    note.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:70;margin:0;padding:10px 14px;border-radius:12px;background:#1F2E3A;color:#FBF3E6;font:13px system-ui";
+    note.textContent = "Water crashed: " + e.message + " (line " + e.lineno + ")";
+    document.body.appendChild(note);
+  });
 
   // tunables (the lab panel edits these)
   var S = {
@@ -298,7 +306,9 @@
   gl.uniform1i(U.uH, 0);
 
   function resize() {
-    W = window.innerWidth; H = window.innerHeight;
+    W = window.innerWidth || document.documentElement.clientWidth;
+    H = window.innerHeight || document.documentElement.clientHeight;
+    if (W < 50 || H < 50) return;   // some browsers report 0 before layout; frame() retries
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -309,6 +319,7 @@
   }
 
   function draw(time) {
+    if (!N) return;
     for (var i = 0; i < N; i++) {
       var e = Math.sqrt(Math.min(h[i] / HMAX, 1)) * 255;
       tex8[i * 2] = e;
@@ -346,6 +357,7 @@
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
+    if (!N) { resize(); return; }
     var dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
     last = now;
     frameCount++; fpsClock += dt;
