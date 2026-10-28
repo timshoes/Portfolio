@@ -29,7 +29,8 @@
     speed: 0.5    // wave speed, screen heights per second
   };
   var lab = {};   // lab panel elements; declared early because motion can start before the panel is built
-  if (LAB) try { var saved = JSON.parse(localStorage.getItem("water-lab") || "{}"); for (var k in saved) if (k in S) S[k] = +saved[k]; } catch (e) {}
+  // a visitor's own settings from the Water Lab page follow them to every page
+  try { var saved = JSON.parse(localStorage.getItem("water-lab") || "{}"); for (var k in saved) if (k in S) S[k] = +saved[k]; } catch (e) {}
 
   // ---------- page layer ----------
   // The canvas reaches OVER px past the top and bottom of the screen. Mobile toolbars change the screen
@@ -474,18 +475,18 @@
       ".wl .row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}" +
       ".wl button.b{font:600 13px var(--sans,system-ui);border:1px solid #1F2E3A;background:transparent;color:#1F2E3A;border-radius:999px;padding:7px 12px;cursor:pointer}" +
       ".wl .read{font-size:12px;color:#3B4A55;font-variant-numeric:tabular-nums;margin:8px 0 0}" +
-      ".wl .sub{font-weight:600;font-size:13px;margin:12px 0 2px}" +
-      ".wl textarea{width:100%;height:90px;font:12px ui-monospace,monospace;margin-top:6px}";
+      ".wl .sub{font-weight:600;font-size:13px;margin:12px 0 2px}";
     document.head.appendChild(st);
 
-    var open = false;
-    try { open = sessionStorage.getItem("water-lab-open") === "1"; } catch (e) {}
+    // open by default where there is room beside the page; on phones it waits for a tap
+    var open = window.innerWidth >= 900;
+    try { var o = sessionStorage.getItem("water-lab-open"); if (o) open = o === "1"; } catch (e) {}
     var tog = document.createElement("button");
     tog.type = "button"; tog.className = "wl-toggle"; tog.textContent = "Water lab";
     var panel = document.createElement("div");
     panel.className = "wl"; panel.hidden = !open;
     panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Water lab settings");
-    panel.innerHTML = "<div class=\"wl-top\"><h2>Water lab</h2><button type=\"button\" class=\"b\">Close</button></div><p>Tune the water, then tap Copy settings and paste them to Claude.</p>";
+    panel.innerHTML = "<div class=\"wl-top\"><h2>Water lab</h2><button type=\"button\" class=\"b\">Close</button></div><p>Make the water your own. Your settings follow you to every page of this site.</p>";
     function setOpen(o) {
       panel.hidden = !o; tog.hidden = o;
       try { sessionStorage.setItem("water-lab-open", o ? "1" : "0"); } catch (e) {}
@@ -550,16 +551,8 @@
     panel.appendChild(row);
     lab.motion = document.createElement("p"); panel.appendChild(lab.motion); labStatus();
 
-    var row2 = document.createElement("div"); row2.className = "row"; panel.appendChild(row2);
-    row = row2;
-    btn("Copy settings", function () {
-      var txt = JSON.stringify(S);
-      var done = function () { copyBtn.textContent = "Copied"; setTimeout(function () { copyBtn.textContent = "Copy settings"; }, 1500); };
-      var fallback = function () { var ta = panel.querySelector("textarea") || panel.appendChild(document.createElement("textarea")); ta.value = txt; ta.select(); };
-      try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
-    });
-    var copyBtn = row2.lastChild;
-    btn("Reset", function () {
+    row = document.createElement("div"); row.className = "row"; panel.appendChild(row);
+    btn("Reset to default", function () {
       try { localStorage.removeItem("water-lab"); } catch (e) {}
       location.reload();
     });
