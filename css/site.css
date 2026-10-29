@@ -120,7 +120,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--pacific); outli
 .p-top { padding-block: 48px 32px; }
 .back { font-size: 15px; font-weight: 600; text-decoration: none; color: var(--ink-muted); }
 .back:hover { color: var(--ember); }
-.p-top h1 { margin: 16px 0 12px; font-family: var(--display); font-weight: 400; font-size: clamp(40px, 6.5vw, 84px); line-height: 1.02; color: var(--ember); text-wrap: balance; }
+.p-top h1, .p-top .work-title { margin: 16px 0 12px; font-family: var(--display); font-weight: 400; font-size: clamp(40px, 6.5vw, 84px); line-height: 1.02; color: var(--ember); text-wrap: balance; }
 .p-top .tagline { margin: 0 0 24px; font-size: 21px; color: var(--ink-muted); max-width: 760px; }
 .p-hero { border-radius: var(--radius-lg); overflow: hidden; background: var(--sky); }
 .p-hero img { width: 100%; max-height: 680px; object-fit: cover; }
