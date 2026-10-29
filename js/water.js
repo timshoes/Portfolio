@@ -46,7 +46,7 @@
     ".water-chip{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;font:600 14px var(--sans,system-ui);color:#1F2E3A;background:#FBF3E6;border:0;border-radius:999px;padding:10px 16px;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer}" +
     "@media (max-width:520px){.water-chip{left:calc(84px + env(safe-area-inset-left,0px));right:16px;transform:none}}" +
     // drain / fill button, under the water; while draining it becomes the hole the water runs into
-    ".water-tap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:48;width:52px;height:52px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:#FBF3E6;color:#1F2E3A;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
+    ".water-tap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:48;width:52px;height:52px;padding:0;border:2px solid #000;border-radius:50%;display:grid;place-items:center;background:#FBF3E6;color:#1F2E3A;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
     ".water-tap:hover{transform:scale(1.06)}" +
     ".water-tap svg{width:26px;height:26px;transition:opacity .3s}" +
     ".water-tap.hole{background:radial-gradient(circle at 50% 42%,#01060a 0 42%,#0a2633 68%,#2a6478 100%);box-shadow:inset 0 6px 12px rgba(0,0,0,.75),0 0 0 3px rgba(251,243,230,.55)}" +
@@ -79,7 +79,8 @@
   // full, pouring, draining, empty, or waiting (empty until the first pour of a visit)
   var mode = "full";
   try {
-    if (localStorage.getItem("water-state") === "empty") mode = "empty";
+    localStorage.removeItem("water-state");   // older versions kept a drained screen across visits
+    if (sessionStorage.getItem("water-state") === "empty") mode = "empty";
     else if (!reduce && sessionStorage.getItem("water-in") !== "1") mode = "waiting";
   } catch (e) {}
 
@@ -588,7 +589,7 @@
   }
   // a stream falls from the top centre, plunges into the water where it lands and fills it up
   function pourStep(dt) {
-    var rowPx = H / rows, g = H * 7;
+    var rowPx = H / rows, g = H * 12;
     stream.x = W / 2; stream.w = Math.max(7, Math.min(16, W * 0.011));
     var c = Math.min(cols - 1, (stream.x / cellPx) | 0), land = H;
     for (var y = 0; y < rows; y++) if (h[y * cols + c] > 0.25) { land = y * rowPx; break; }
@@ -599,7 +600,7 @@
     stream.splash += ((landed && !stream.release ? 1 : 0) - stream.splash) * Math.min(1, dt * 6);
     if (mode !== "pouring" || !landed) return;
     fillT += dt;
-    var target = targetVolume(), amt = Math.min(target - volume, target / 2.4 * dt);
+    var target = targetVolume(), amt = Math.min(target - volume, target / 1.3 * dt);
     if (amt <= 0) { mode = "full"; volume = target; stream.release = true; setTap(); return; }
     var hw = Math.max(1, stream.w / cellPx), ly = Math.min(rows - 1, (land / rowPx) | 0), fall = S.speed * rows * 2;
     // the water it brings spreads out under the surface, so the level rises instead of piling up a mound
@@ -650,7 +651,7 @@
     tap.setAttribute("aria-label", label); tap.title = label;
   }
   function remember(state) {
-    try { state ? localStorage.setItem("water-state", state) : localStorage.removeItem("water-state"); sessionStorage.setItem("water-in", "1"); } catch (e) {}
+    try { state ? sessionStorage.setItem("water-state", state) : sessionStorage.removeItem("water-state"); sessionStorage.setItem("water-in", "1"); } catch (e) {}
   }
   tap.addEventListener("click", function () {
     var draining = mode === "full" || mode === "pouring";
@@ -670,7 +671,7 @@
     if (mode !== "waiting") return;
     remember(null);
     startPour();
-  }, 900);
+  }, 150);
 
   function start() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }

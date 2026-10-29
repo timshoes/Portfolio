@@ -41,7 +41,8 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   in their browser (`localStorage` key `water-lab`) and applied on every page.
 - Pour and drain: the first page of each visit pours the water in as a clear, glassy stream from the top
   centre that splashes where it lands (sessionStorage `water-in`); the fill button pours the same way. The
-  round button bottom-left (`.water-tap`, z-index 48, under the water) drains the water into itself (it turns
-  into a hole). A drained choice persists (`localStorage` key `water-state` = `empty`).
+  round button bottom-left (`.water-tap`, black outline, z-index 48, under the water) drains the water into
+  itself (it turns into a hole). A drained choice lasts for the visit only (sessionStorage `water-state`), so
+  every new visit pours in. The pour takes about 2 seconds.
   Reduced motion: no animation, the water is just there or gone.
 - The old image-based page-transition wave (`wave.js`, `.wash`) was removed on purpose; don't bring it back.
