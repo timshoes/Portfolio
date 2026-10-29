@@ -40,11 +40,11 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 - Defaults in the object `S` are Tim's tuned settings. `data-lab` on the script tag shows the tuning
   panel; only `work/water-lab.html` (the Water Lab case study) has it. A visitor's own settings are saved
   in their browser (`localStorage` key `water-lab`) and applied on every page.
-- Pour and drain: the first page of each visit pours the water in as a clear, glassy stream from the top
-  centre that splashes where it lands (sessionStorage `water-in`); the fill button pours the same way. The
-  round button bottom-left (`.water-tap`, black outline, z-index 48, under the water) drains the water into
+- Fill and drain: the first page of each visit fills the water in from the bottom like surf running up a
+  shore, in a few surges (sessionStorage `water-in`); the fill button fills the same way. The
+  round button bottom-left (`.water-tap`, orange with a black outline, z-index 48, under the water) drains the water into
   itself (it turns into a hole). A drained choice lasts for the visit only (sessionStorage `water-state`), so
-  every new visit pours in. The pour takes about 2 seconds.
+  every new visit fills in. The fill takes about 2 seconds.
   Reduced motion: no animation, the water is just there or gone.
 - Page bending under the water is Chrome-based browsers only (`backdrop-filter:url(#water-bend)`). Safari/iPhone
   doesn't bend; a per-element SVG filter fallback was tried and reverted because it caused other issues.
