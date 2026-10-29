@@ -10,8 +10,8 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   made there never reach the live site.
 - **Netlify** deploys from this repo. `main` = production at https://timhowes.me. Every push to `main`
   goes live within about a minute, so only merge finished work into `main`.
-- Experiments go on their own branch (e.g. `water`). Netlify branch deploys give each one a preview at
-  `<branch>--<netlify-project>.netlify.app`. Tim tests on his phone there before anything is merged.
+- Commit and push straight to `main` by default. Use a branch (Netlify preview at
+  `<branch>--<netlify-project>.netlify.app`) only when Tim asks for one.
 
 ## Working rules
 - Keep changes surgical and match the existing hand-written HTML/CSS style.
@@ -39,8 +39,9 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 - Defaults in the object `S` are Tim's tuned settings. `data-lab` on the script tag shows the tuning
   panel; only `work/water-lab.html` (the Water Lab case study) has it. A visitor's own settings are saved
   in their browser (`localStorage` key `water-lab`) and applied on every page.
-- Pour and drain: the first page of each visit has a wave crash in from the top (sessionStorage `water-in`).
-  The round button bottom-left (`.water-tap`) drains the water into itself (it turns into a hole) and pours it
-  back in as a stream from the centre top. A drained choice persists (`localStorage` key `water-state` = `empty`).
+- Pour and drain: the first page of each visit pours the water in as a clear, glassy stream from the top
+  centre that splashes where it lands (sessionStorage `water-in`); the fill button pours the same way. The
+  round button bottom-left (`.water-tap`, z-index 48, under the water) drains the water into itself (it turns
+  into a hole). A drained choice persists (`localStorage` key `water-state` = `empty`).
   Reduced motion: no animation, the water is just there or gone.
 - The old image-based page-transition wave (`wave.js`, `.wash`) was removed on purpose; don't bring it back.

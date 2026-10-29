@@ -4,8 +4,8 @@
    around, and the screen edges hold it in. The amount of water never changes, so
    when gravity no longer pins it to the bottom (phone laid flat) it spreads into a
    thinner, clearer sheet. WebGL draws it; the page stays clickable underneath.
-   A visit starts with a wave crashing in from the top; the round button in the
-   bottom-left corner drains the water into a hole and pours it back in. */
+   A visit starts with a stream of water pouring in from the top centre; the round
+   button under the water in the bottom-left corner drains it into a hole and pours it back in. */
 (function () {
   var script = document.currentScript;
   var LAB = !!(script && script.hasAttribute("data-lab"));
@@ -45,8 +45,8 @@
     ".site-head{position:relative;z-index:60}" +
     ".water-chip{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;font:600 14px var(--sans,system-ui);color:#1F2E3A;background:#FBF3E6;border:0;border-radius:999px;padding:10px 16px;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer}" +
     "@media (max-width:520px){.water-chip{left:calc(84px + env(safe-area-inset-left,0px));right:16px;transform:none}}" +
-    // drain / fill button; while draining it becomes the hole the water runs into
-    ".water-tap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:61;width:52px;height:52px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:#FBF3E6;color:#1F2E3A;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
+    // drain / fill button, under the water; while draining it becomes the hole the water runs into
+    ".water-tap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:48;width:52px;height:52px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:#FBF3E6;color:#1F2E3A;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
     ".water-tap:hover{transform:scale(1.06)}" +
     ".water-tap svg{width:26px;height:26px;transition:opacity .3s}" +
     ".water-tap.hole{background:radial-gradient(circle at 50% 42%,#01060a 0 42%,#0a2633 68%,#2a6478 100%);box-shadow:inset 0 6px 12px rgba(0,0,0,.75),0 0 0 3px rgba(251,243,230,.55)}" +
@@ -76,7 +76,7 @@
   var h, u, v, P, kf, ag, wm, tex8;
   var volume = 0, drift = 0;
   var W = 0, H = 0, dpr = 1;
-  // full, crash (first wave of a visit), pouring, draining, empty, or waiting (empty until the first wave)
+  // full, pouring, draining, empty, or waiting (empty until the first pour of a visit)
   var mode = "full";
   try {
     if (localStorage.getItem("water-state") === "empty") mode = "empty";
@@ -262,6 +262,7 @@
   var FS = [
     "#ifdef GL_FRAGMENT_PRECISION_HIGH", "precision highp float;", "#else", "precision mediump float;", "#endif",
     "uniform sampler2D uH;uniform vec2 uRes,uGrid;uniform float uOver,uCanH,uDpr,uCell,uTime,uAct,uClar,uFoam,uHMax;",
+    "uniform vec4 uPour;uniform float uClock,uSplash;",
     "float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}",
     "float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}",
     "float fbm(vec2 p){float a=.5,s=0.;for(int k=0;k<3;k++){s+=a*noise(p);p=p*2.03+17.1;a*=.5;}return s;}",
@@ -269,18 +270,18 @@
     // light patterns dancing on the sea floor: where two drifting noise fields meet
     "float caustic(vec2 p,float t){float a1=noise(p+vec2(t*.30,t*.20)),a2=noise(p*1.3-vec2(t*.25,-t*.15)+4.);",
     "return pow(clamp(1.-abs(a1-a2)*3.,0.,1.),8.);}",
-    "void main(){",
+    "vec4 water(){",
     " vec2 uv=vec2(gl_FragCoord.x/uRes.x,(uCanH-gl_FragCoord.y-uOver)/uRes.y);",
     // r: depth, g: churn, b: how recently this spot was under water
     " vec4 s=texture2D(uH,uv);float h=s.r*s.r*uHMax;",
-    " if(h<.004&&s.b<.02){gl_FragColor=vec4(0.);return;}",
+    " if(h<.004&&s.b<.02)return vec4(0.);",
     " vec2 px=gl_FragCoord.xy/uDpr;float t=uTime;vec2 q=px/90.;",
     " float thr=.012+.012*fbm(q*1.3+vec2(t*.05,-t*.08));",
     " float wet=smoothstep(thr,thr+.012,h);",
     // wet sand: a darker band left behind when the water pulls back
     " float sa=.07*s.b*s.b*(1.-wet)*(.7+.3*noise(q*7.));",
     " vec3 sc=vec3(.36,.27,.17);",
-    " if(wet<=0.){gl_FragColor=vec4(sc*sa,sa);return;}",
+    " if(wet<=0.)return vec4(sc*sa,sa);",
     " vec2 tx=1./uGrid;",
     " vec2 g=vec2(H(uv+vec2(tx.x,0.))-H(uv-vec2(tx.x,0.)),H(uv+vec2(0.,tx.y))-H(uv-vec2(0.,tx.y)))*.5;",
     // estimated distance to the shoreline, in css px
@@ -319,8 +320,32 @@
     " col=mix(col,vec3(.984,.953,.902),foam);a=mix(a,.92,foam);",
     " a=clamp(a*wet,0.,.95);",
     // water over the wet sand, premultiplied
-    " gl_FragColor=vec4(col*a+sc*sa*(1.-a),a+sa*(1.-a));",
-    "}"
+    " return vec4(col*a+sc*sa*(1.-a),a+sa*(1.-a));",
+    "}",
+    // the pouring stream: a clear glassy column (uPour: centre x, half width, top, bottom in css px)
+    "vec4 stream(){",
+    " if(uPour.y<=0.)return vec4(0.);",
+    " float x=gl_FragCoord.x/uDpr,y=(uCanH-gl_FragCoord.y-uOver)/uDpr,t=uClock;",
+    " if(y<uPour.z||y>uPour.w+uPour.y*4.)return vec4(0.);",
+    " float f=clamp(y/max(uPour.w,1.),0.,1.);",
+    // it narrows and wobbles as it falls, its edges rippling downward
+    " float cx=uPour.x+sin(y*.021-t*9.)*2.5*f+(noise(vec2(y*.02-t*14.,1.))-.5)*7.*f;",
+    " float w=uPour.y*(1.-.4*f)*(.75+.5*noise(vec2(y*.045-t*22.,7.)));",
+    " float d=abs(x-cx)/w;",
+    " float body=smoothstep(1.,.8,d)*smoothstep(uPour.z,uPour.z+30.,y)*smoothstep(uPour.w+6.,uPour.w-6.,y);",
+    // glass: clear in the middle, darker rims, bright streaks running down
+    " float hl=smoothstep(.6,.8,noise(vec2(x/w*1.5,y*.025-t*18.)))*(1.-d*d);",
+    " float edge=smoothstep(.5,.95,d);",
+    " vec3 c=mix(vec3(.82,.94,1.),vec3(.16,.40,.56),edge*.75)+hl*.6;",
+    " float a=body*(.2+.55*edge+.45*hl);",
+    // splash: droplets thrown up where the stream hits
+    " vec2 sp=(vec2(x,y)-vec2(uPour.x,uPour.w))/vec2(uPour.y*4.5,uPour.y*3.5);",
+    " float ring=(1.-smoothstep(.3,1.,length(sp)))*smoothstep(.5,-.2,sp.y);",
+    " float dr=smoothstep(.78,.93,noise(vec2(x,y)*.22+vec2(t*3.,t*9.)))*ring*uSplash;",
+    " c=mix(c,vec3(.97,.99,1.),dr);a=max(a,dr*.85);",
+    " return vec4(c*a,a);",
+    "}",
+    "void main(){vec4 w=water(),s=stream();gl_FragColor=s+w*(1.-s.a);}"
   ].join("\n");
 
   function shader(type, src) {
@@ -344,7 +369,7 @@
   gl.enableVertexAttribArray(aLoc);
   gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
   var U = {};
-  ["uH", "uRes", "uOver", "uCanH", "uGrid", "uDpr", "uCell", "uTime", "uAct", "uClar", "uFoam", "uHMax"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+  ["uH", "uRes", "uOver", "uCanH", "uGrid", "uDpr", "uCell", "uTime", "uAct", "uClar", "uFoam", "uHMax", "uPour", "uClock", "uSplash"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
   var texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -388,6 +413,9 @@
     gl.uniform1f(U.uClar, S.clarity);
     gl.uniform1f(U.uFoam, S.foam);
     gl.uniform1f(U.uHMax, HMAX);
+    gl.uniform4f(U.uPour, stream.x, stream.on ? stream.w : 0, stream.top, stream.bot);
+    gl.uniform1f(U.uClock, (time / 1000) % 600);
+    gl.uniform1f(U.uSplash, stream.splash);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -475,7 +503,7 @@
     var dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
     last = now;
     // drained and dry: clear once, then do nothing until the water comes back
-    if ((mode === "empty" || mode === "waiting") && volume <= 0 && wetMax < 0.01) {
+    if ((mode === "empty" || mode === "waiting") && volume <= 0 && wetMax < 0.01 && !stream.on) {
       if (!idle) { idle = true; draw(now); if (bend) { bend.layer.style.display = "none"; bend.clip = "none"; } }
       return;
     }
@@ -537,8 +565,8 @@
       }
     }
 
-    if (mode === "crash" || mode === "pouring") inflow(dt);
-    else if (mode === "draining") drainStep(dt);
+    if (stream.on) pourStep(dt);
+    if (mode === "draining") drainStep(dt);
 
     // stable sub-steps
     var c = S.speed * rows * Math.sqrt(2 * grav.z + 1) * 1.6;
@@ -551,31 +579,39 @@
   }
 
   // ---------- pour in and drain ----------
-  var fillT = 0, crashPhase = 0;
-  function inflow(dt) {
-    var target = targetVolume(), amt = Math.min(target - volume, target / (mode === "crash" ? 1.1 : 2.6) * dt);
-    if (amt <= 0) { mode = "full"; volume = target; setTap(); return; }
+  var fillT = 0;
+  var stream = { on: false, release: false, x: 0, w: 0, top: 0, bot: 0, vt: 0, vb: 0, splash: 0 };
+  function startPour() {
+    mode = "pouring"; fillT = 0;
+    stream.on = true; stream.release = false; stream.top = stream.bot = -30; stream.vt = stream.vb = 0;
+    setTap();
+  }
+  // a stream falls from the top centre, plunges into the water where it lands and fills it up
+  function pourStep(dt) {
+    var rowPx = H / rows, g = H * 7;
+    stream.x = W / 2; stream.w = Math.max(7, Math.min(16, W * 0.011));
+    var c = Math.min(cols - 1, (stream.x / cellPx) | 0), land = H;
+    for (var y = 0; y < rows; y++) if (h[y * cols + c] > 0.25) { land = y * rowPx; break; }
+    stream.vb += g * dt; stream.bot = Math.min(land, stream.bot + stream.vb * dt);
+    if (stream.release) { stream.vt += g * dt; stream.top += stream.vt * dt; }
+    if (stream.top >= stream.bot) { stream.on = false; stream.splash = 0; return; }
+    var landed = stream.bot >= land - 1;
+    stream.splash += ((landed && !stream.release ? 1 : 0) - stream.splash) * Math.min(1, dt * 6);
+    if (mode !== "pouring" || !landed) return;
     fillT += dt;
-    var fall = S.speed * rows * 2, x, y, i, w, sum = 0;
-    if (mode === "crash") {
-      // the first wave of a visit: a lumpy sheet over the full width, its lip rolling sideways as it falls
-      for (x = 0; x < cols; x++) sum += 0.55 + 0.45 * Math.sin(x / cols * 7.3 + crashPhase + fillT * 3);
-      for (y = 0; y < 2; y++) for (x = 0; x < cols; x++) {
-        i = y * cols + x; w = (0.55 + 0.45 * Math.sin(x / cols * 7.3 + crashPhase + fillT * 3)) / sum / 2;
-        h[i] += amt * w;
-        v[i] = Math.max(v[i], h[i] * fall);
-        u[i] += h[i] * fall * 0.25;
-      }
-    } else {
-      // a refill: a narrow stream from the centre top, wobbling a little
-      var hw = Math.max(1, cols * 0.012), c = cols / 2 + Math.sin(fillT * 5) * 0.6;
-      var x0 = Math.max(0, Math.floor(c - hw)), x1 = Math.min(cols - 1, Math.ceil(c + hw));
-      for (y = 0; y < 2; y++) for (x = x0; x <= x1; x++) {
-        i = y * cols + x;
-        h[i] += amt / (2 * (x1 - x0 + 1));
-        v[i] = Math.max(v[i], h[i] * fall);
-      }
+    var target = targetVolume(), amt = Math.min(target - volume, target / 2.4 * dt);
+    if (amt <= 0) { mode = "full"; volume = target; stream.release = true; setTap(); return; }
+    var hw = Math.max(1, stream.w / cellPx), ly = Math.min(rows - 1, (land / rowPx) | 0), fall = S.speed * rows * 2;
+    // the water it brings spreads out under the surface, so the level rises instead of piling up a mound
+    var sig = Math.max(3, cols * 0.14), wsum = 0, x, i;
+    for (x = 0; x < cols; x++) wsum += Math.exp(-((x - c) * (x - c)) / (sig * sig)) * (rows - ly);
+    for (y = ly; y < rows; y++) for (x = 0; x < cols; x++) {
+      i = y * cols + x;
+      h[i] += amt * Math.exp(-((x - c) * (x - c)) / (sig * sig)) / wsum;
+      // right under the stream it is driven down and churned into bubbles
+      if (y < ly + 2 && Math.abs(x - c) <= hw) { v[i] = Math.max(v[i], h[i] * fall); ag[i] = 1; }
     }
+    push(c + 0.5, ly + 0.5, Math.max(2, hw * 3), 0, 0, S.speed * rows * 0.6, dt);
     volume += amt;
   }
   function drainStep(dt) {
@@ -617,7 +653,7 @@
     try { state ? localStorage.setItem("water-state", state) : localStorage.removeItem("water-state"); sessionStorage.setItem("water-in", "1"); } catch (e) {}
   }
   tap.addEventListener("click", function () {
-    var draining = mode === "full" || mode === "crash" || mode === "pouring";
+    var draining = mode === "full" || mode === "pouring";
     remember(draining ? "empty" : null);
     if (reduce) {
       // no animation: the water is simply there or gone
@@ -626,13 +662,14 @@
       if (!draining) { volume = targetVolume(); fillFlat(); normalize(); }
       draw(0); setTap(); return;
     }
-    mode = draining ? "draining" : "pouring"; fillT = 0; setTap();
+    if (draining) { mode = "draining"; fillT = 0; stream.release = true; setTap(); }
+    else startPour();
   });
   setTap();
   if (mode === "waiting") setTimeout(function () {
     if (mode !== "waiting") return;
     remember(null);
-    mode = "crash"; fillT = 0; crashPhase = Math.random() * 6.28; setTap();
+    startPour();
   }, 900);
 
   function start() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
