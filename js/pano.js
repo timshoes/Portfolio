@@ -50,7 +50,7 @@
     canvas.addEventListener("pointerdown", function (e) {
       drag = { x: e.clientX, y: e.clientY, yaw: self.yaw, pitch: self.pitch, type: e.pointerType };
       canvas.setPointerCapture(e.pointerId); host.classList.add("pano-grab"); self.touched = true;
-      self.drift = 0;   // the slow automatic turn stops for good once the visitor takes over
+      self.drift = 0; self.held = true;   // the automatic turn and the scroll turn stop for good once the visitor takes over
     });
     canvas.addEventListener("pointermove", function (e) {
       if (!drag) return;
@@ -63,7 +63,7 @@
 
     // scroll to pan: a quarter turn across the first screen of scrolling
     if (opts.scroll && !reduce) {
-      window.addEventListener("scroll", function () { self.scrollYaw = Math.min(window.scrollY, 1600) / window.innerHeight * (Math.PI / 2); }, { passive: true });
+      window.addEventListener("scroll", function () { if (self.held) return; self.scrollYaw = Math.min(window.scrollY, 1600) / window.innerHeight * (Math.PI / 2); }, { passive: true });
     }
 
     // only play while on screen
