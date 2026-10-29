@@ -44,10 +44,11 @@
     ".water-layer{position:fixed;left:0;top:-" + OVER + "px;width:100%;height:calc(100% + " + 2 * OVER + "px);z-index:50;pointer-events:none;display:block}" +
     ".site-head{position:relative;z-index:60}" +
     ".water-chip{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;font:600 14px var(--sans,system-ui);color:#1F2E3A;background:#FBF3E6;border:0;border-radius:999px;padding:10px 16px;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer}" +
-    "@media (max-width:520px){.water-chip{left:calc(84px + env(safe-area-inset-left,0px));right:16px;transform:none}}" +
-    // drain / fill button, under the water; while draining it becomes the hole the water runs into
-    ".water-tap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:48;width:52px;height:52px;padding:0;border:2px solid #000;border-radius:50%;display:grid;place-items:center;background:#E8772A;color:#1F2E3A;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
-    ".water-tap:hover{transform:scale(1.06);background:#F5A04E}" +
+    "@media (max-width:520px){.water-chip{left:16px;right:calc(84px + env(safe-area-inset-right,0px));transform:none}}" +
+    // drain / fill button, bottom right under the water: black to drain, blue to fill; while draining it becomes the hole
+    ".water-tap{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:48;width:52px;height:52px;padding:0;border:2px solid #FFF;border-radius:50%;display:grid;place-items:center;background:#000;color:#FFF;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
+    ".water-tap:hover{transform:scale(1.06);background:#222}" +
+    ".water-tap.fill{background:#4A9FCF;color:#1F2E3A;border-color:#000}.water-tap.fill:hover{background:#6DB4DC}" +
     ".water-tap svg{width:26px;height:26px;transition:opacity .3s}" +
     ".water-tap.hole{background:radial-gradient(circle at 50% 42%,#01060a 0 42%,#0a2633 68%,#2a6478 100%);box-shadow:inset 0 6px 12px rgba(0,0,0,.75),0 0 0 3px rgba(251,243,230,.55)}" +
     ".water-tap.hole svg{opacity:0}" +
@@ -602,13 +603,15 @@
   }
 
   var ICON_DRAIN = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 9h8M7 12h10M8 15h8\"/></svg>";
-  var ICON_FILL = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3c3.5 4.6 6 7.8 6 11a6 6 0 0 1-12 0c0-3.2 2.5-6.4 6-11z\"/><path d=\"M12 11v6M9 14h6\" stroke-linecap=\"round\"/></svg>";
+  // the same waves as the "Make your own waves" button
+  var ICON_FILL = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M2 9c2.5-2.5 4.5-2.5 7 0s4.5 2.5 7 0 4.5-2.5 6 0\"/><path d=\"M2 16c2.5-2.5 4.5-2.5 7 0s4.5 2.5 7 0 4.5-2.5 6 0\"/></svg>";
   var tap = document.createElement("button");
   tap.type = "button"; tap.className = "water-tap";
   document.body.appendChild(tap);
   function setTap() {
     var empty = mode === "empty" || mode === "waiting";
     tap.classList.toggle("hole", mode === "draining");
+    tap.classList.toggle("fill", empty);
     tap.innerHTML = empty ? ICON_FILL : ICON_DRAIN;
     var label = empty || mode === "draining" ? "Pour the water back in" : "Drain the water";
     tap.setAttribute("aria-label", label); tap.title = label;
@@ -703,7 +706,10 @@
       try { sessionStorage.setItem("water-lab-open", o ? "1" : "0"); } catch (e) {}
     }
     tog.hidden = open;
-    tog.addEventListener("click", function () { setOpen(true); });
+    tog.addEventListener("click", function () {
+      setOpen(true);
+      if (mode === "empty" || mode === "waiting" || mode === "draining") tap.click();   // no water to play with: bring it back
+    });
     panel.querySelector(".wl-top button").addEventListener("click", function () { setOpen(false); });
 
     function save() { try { localStorage.setItem("water-lab", JSON.stringify(S)); } catch (e) {} }

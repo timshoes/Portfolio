@@ -50,8 +50,9 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   in their browser (`localStorage` key `water-lab`) and applied on every page.
 - Fill and drain: the first page of each visit fills the water in from the bottom like surf running up a
   shore, in a few surges (sessionStorage `water-in`); the fill button fills the same way. The
-  round button bottom-left (`.water-tap`, orange with a black outline, z-index 48, under the water) drains the water into
-  itself (it turns into a hole). A drained choice lasts for the visit only (sessionStorage `water-state`), so
+  round button bottom-right (`.water-tap`, z-index 48, under the water; black with a white icon and outline to drain,
+  blue #4A9FCF with the waves icon to fill) drains the water into
+  itself (it turns into a hole). "Make your own waves" also refills a drained page. A drained choice lasts for the visit only (sessionStorage `water-state`), so
   every new visit fills in. The fill takes about 2 seconds.
   Reduced motion: no animation, the water is just there or gone.
 - Page bending under the water is Chrome-based browsers only (`backdrop-filter:url(#water-bend)`). Safari/iPhone
