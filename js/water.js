@@ -446,20 +446,71 @@
   // ---------- page bending under the water ----------
   // Chrome-based browsers can run an SVG ripple filter on whatever sits behind an element
   // (backdrop-filter: url()). A layer under the canvas, clipped to the water's outline, bends the page there.
-  var bend = null;
-  if (!reduce && navigator.userAgentData) {
+  var bend = null, sink = null;
+  if (!reduce) {
     var NS = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(NS, "svg");
     svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.setAttribute("aria-hidden", "true");
     svg.style.position = "absolute";
     svg.innerHTML = '<filter id="water-bend" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G"/></filter>';
     document.body.appendChild(svg);
+  }
+  if (!reduce && navigator.userAgentData) {
     var layer = document.createElement("div");
     layer.setAttribute("aria-hidden", "true");
     layer.style.cssText = "position:fixed;left:0;top:-" + OVER + "px;width:100%;height:calc(100% + " + 2 * OVER + "px);z-index:49;pointer-events:none;backdrop-filter:url(#water-bend);display:none";
     document.body.appendChild(layer);
     bend = { layer: layer, map: svg.querySelector("feDisplacementMap"), clip: "", scale: -1, sc: 0, tops: [], tick: 0 };
+  } else if (!reduce && "IntersectionObserver" in window) {
+    // Safari (every iPhone browser) and Firefox can't bend what sits behind an element, so there each text
+    // block or image reaching under the water bends itself, below the waterline only: a filter of its own
+    // displaces it and keeps the displaced copy under the line (feFlood marks that part).
+    sink = { svg: svg, filters: new Map(), free: [], near: new Set(), sc: 0, tick: 0, n: 0 };
+    // only elements in the lower part of the screen can be under water
+    var io = new IntersectionObserver(function (list) {
+      list.forEach(function (e) { if (e.isIntersecting) sink.near.add(e.target); else { sink.near.delete(e.target); unsink(e.target); } });
+    }, { rootMargin: "-50% 0px 0px 0px" });
+    document.querySelectorAll("main :is(p,li,h1,h2,h3,dt,dd,figcaption,img,.btn), .site-foot :is(p,h2,a,span)").forEach(function (el) { io.observe(el); });
   }
+  function unsink(el) {
+    var f = sink.filters.get(el);
+    if (!f) return;
+    el.style.filter = ""; sink.filters.delete(el); sink.free.push(f);
+  }
+  function sinkFilter() {
+    var f = sink.free.pop();
+    if (f) return f;
+    f = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    f.id = "water-sink-" + (sink.n++);
+    f.setAttribute("x", "0"); f.setAttribute("y", "0"); f.setAttribute("width", "100%"); f.setAttribute("height", "100%");
+    f.setAttribute("color-interpolation-filters", "sRGB");
+    f.innerHTML = '<feTurbulence type="fractalNoise" baseFrequency="0.012 0.04" numOctaves="2" seed="4" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="0" xChannelSelector="R" yChannelSelector="G" result="d"/><feFlood flood-color="#000" y="0" height="4000" result="m"/><feComposite in="d" in2="m" operator="in" result="u"/><feComposite in="SourceGraphic" in2="m" operator="out" result="a"/><feMerge><feMergeNode in="a"/><feMergeNode in="u"/></feMerge>';
+    sink.svg.appendChild(f);
+    return f;
+  }
+  function updateSink() {
+    if (!sink || ++sink.tick % 3) return;
+    var rowPx = H / rows, any = false;
+    var target = 16 * S.bend * (0.25 + 0.75 * act);
+    sink.sc += (target - sink.sc) * 0.3;
+    var sc = Math.round(sink.sc * 2) / 2;
+    sink.near.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.width || S.bend <= 0) { unsink(el); return; }
+      // waterline: the highest wet point across the element
+      var top = H + 1;
+      for (var k = 0; k < 3; k++) {
+        var c = Math.min(cols - 1, Math.max(0, ((r.left + r.width * (0.15 + 0.35 * k)) / cellPx) | 0));
+        for (var y = 0; y < rows; y++) if (h[y * cols + c] > 0.02) { top = Math.min(top, y * rowPx); break; }
+      }
+      if (r.bottom <= top + 2) { unsink(el); return; }
+      var f = sink.filters.get(el), line = Math.max(0, Math.round(top - r.top));
+      if (!f) { f = sinkFilter(); sink.filters.set(el, f); f.line = -1; f.sc = -1; el.style.filter = "url(#" + f.id + ")"; }
+      if (f.line !== line) { f.children[2].setAttribute("y", line); f.line = line; }
+      if (f.sc !== sc) { f.children[1].setAttribute("scale", sc); f.sc = sc; }
+    });
+  }
+
   // The bending pattern itself is still; only its strength and outline follow the water, both eased,
   // so text under calm water holds steady.
   function updateBend() {
@@ -505,7 +556,7 @@
     last = now;
     // drained and dry: clear once, then do nothing until the water comes back
     if ((mode === "empty" || mode === "waiting") && volume <= 0 && wetMax < 0.01 && !stream.on) {
-      if (!idle) { idle = true; draw(now); if (bend) { bend.layer.style.display = "none"; bend.clip = "none"; } }
+      if (!idle) { idle = true; draw(now); if (bend) { bend.layer.style.display = "none"; bend.clip = "none"; } if (sink) sink.filters.forEach(function (f, el) { unsink(el); }); }
       return;
     }
     idle = false;
@@ -577,6 +628,7 @@
     updateAgitation(dt);
     draw(now);
     updateBend();
+    updateSink();
   }
 
   // ---------- pour in and drain ----------
