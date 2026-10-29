@@ -26,6 +26,10 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   page-through Brand guidelines (one image per page), one Highlight image, no Results. The Ri guideline
   pages are rendered from an HTML source in Ri fonts and colours (Bodoni Moda, Inter; black, #330066, #FFC31A).
 - Page-through viewers: `<div class="flip" data-flip>` with one `<figure>` per page, plus `js/flip.js`.
+- `embed/ri-home-hero.html` is the live Ruscella Immersive homepage banner (three.js 360 stage and swinging
+  light), copied from the cover section of `index.html` in the timshoes/RuscellaImmersive repo. It is shown in an
+  iframe on the Ri website case study; its links open ruscellaimmersive.com. Desktop: drag to look around;
+  phones: look-around with phone motion is on by default (iPhone after one tap on the stage).
 - Links between pages are relative (`../` from `work/`).
 - Respect `prefers-reduced-motion` in anything animated.
 - Commit with clear messages and push; tell Tim the preview or live URL to check.
