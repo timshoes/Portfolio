@@ -50,6 +50,7 @@
     canvas.addEventListener("pointerdown", function (e) {
       drag = { x: e.clientX, y: e.clientY, yaw: self.yaw, pitch: self.pitch, type: e.pointerType };
       canvas.setPointerCapture(e.pointerId); host.classList.add("pano-grab"); self.touched = true;
+      self.drift = 0;   // the slow automatic turn stops for good once the visitor takes over
     });
     canvas.addEventListener("pointermove", function (e) {
       if (!drag) return;
