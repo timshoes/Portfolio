@@ -46,4 +46,6 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   itself (it turns into a hole). A drained choice lasts for the visit only (sessionStorage `water-state`), so
   every new visit pours in. The pour takes about 2 seconds.
   Reduced motion: no animation, the water is just there or gone.
+- Page bending under the water is Chrome-based browsers only (`backdrop-filter:url(#water-bend)`). Safari/iPhone
+  doesn't bend; a per-element SVG filter fallback was tried and reverted because it caused other issues.
 - The old image-based page-transition wave (`wave.js`, `.wash`) was removed on purpose; don't bring it back.
