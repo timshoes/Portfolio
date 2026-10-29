@@ -33,10 +33,14 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
 - WebGL shallow-water simulation fixed to the viewport, under the header (`z-index` 50 vs header 60),
   `pointer-events: none` so the page stays clickable.
 - Reacts to cursor (only over the water, stronger with speed), touch, scroll (slosh then settle) and phone
-  tilt. Volume is constant: laid flat, the water spreads into a thin clear sheet.
+  tilt. Volume is constant (except while pouring or draining): laid flat, the water spreads into a thin clear sheet.
 - iPhone motion needs a tap to grant permission (the "Tilt your phone" chip). Motion sensors only work
   over HTTPS on the real site, not inside claude.ai artifact previews.
 - Defaults in the object `S` are Tim's tuned settings. `data-lab` on the script tag shows the tuning
   panel; only `work/water-lab.html` (the Water Lab case study) has it. A visitor's own settings are saved
   in their browser (`localStorage` key `water-lab`) and applied on every page.
+- Pour and drain: the first page of each visit has a wave crash in from the top (sessionStorage `water-in`).
+  The round button bottom-left (`.water-tap`) drains the water into itself (it turns into a hole) and pours it
+  back in as a stream from the centre top. A drained choice persists (`localStorage` key `water-state` = `empty`).
+  Reduced motion: no animation, the water is just there or gone.
 - The old image-based page-transition wave (`wave.js`, `.wash`) was removed on purpose; don't bring it back.

@@ -3,7 +3,9 @@
    stores how much water it holds; gravity, the cursor, touch and scrolling push it
    around, and the screen edges hold it in. The amount of water never changes, so
    when gravity no longer pins it to the bottom (phone laid flat) it spreads into a
-   thinner, clearer sheet. WebGL draws it; the page stays clickable underneath. */
+   thinner, clearer sheet. WebGL draws it; the page stays clickable underneath.
+   A visit starts with a wave crashing in from the top; the round button in the
+   bottom-left corner drains the water into a hole and pours it back in. */
 (function () {
   var script = document.currentScript;
   var LAB = !!(script && script.hasAttribute("data-lab"));
@@ -42,7 +44,14 @@
     ".water-layer{position:fixed;left:0;top:-" + OVER + "px;width:100%;height:calc(100% + " + 2 * OVER + "px);z-index:50;pointer-events:none;display:block}" +
     ".site-head{position:relative;z-index:60}" +
     ".water-chip{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;font:600 14px var(--sans,system-ui);color:#1F2E3A;background:#FBF3E6;border:0;border-radius:999px;padding:10px 16px;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer}" +
-    ".water-chip:focus-visible,.wl button:focus-visible,.wl input:focus-visible{outline:2px solid #E8772A;outline-offset:2px}";
+    "@media (max-width:520px){.water-chip{left:calc(84px + env(safe-area-inset-left,0px));right:16px;transform:none}}" +
+    // drain / fill button; while draining it becomes the hole the water runs into
+    ".water-tap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:61;width:52px;height:52px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:#FBF3E6;color:#1F2E3A;box-shadow:0 4px 18px rgba(31,46,58,.25);cursor:pointer;transition:background .4s,box-shadow .4s,transform .2s}" +
+    ".water-tap:hover{transform:scale(1.06)}" +
+    ".water-tap svg{width:26px;height:26px;transition:opacity .3s}" +
+    ".water-tap.hole{background:radial-gradient(circle at 50% 42%,#01060a 0 42%,#0a2633 68%,#2a6478 100%);box-shadow:inset 0 6px 12px rgba(0,0,0,.75),0 0 0 3px rgba(251,243,230,.55)}" +
+    ".water-tap.hole svg{opacity:0}" +
+    ".water-tap:focus-visible,.water-chip:focus-visible,.wl button:focus-visible,.wl input:focus-visible{outline:2px solid #E8772A;outline-offset:2px}";
   document.head.appendChild(css);
 
   var canvas = document.createElement("canvas");
@@ -67,6 +76,12 @@
   var h, u, v, P, kf, ag, wm, tex8;
   var volume = 0, drift = 0;
   var W = 0, H = 0, dpr = 1;
+  // full, crash (first wave of a visit), pouring, draining, empty, or waiting (empty until the first wave)
+  var mode = "full";
+  try {
+    if (localStorage.getItem("water-state") === "empty") mode = "empty";
+    else if (!reduce && sessionStorage.getItem("water-in") !== "1") mode = "waiting";
+  } catch (e) {}
 
   function bandRows() { return Math.max(2, S.level * rows); }
   function slopeG() { return 1 / bandRows(); }          // depth gained per row below the waterline, upright
@@ -74,27 +89,32 @@
 
   function buildGrid(nc, nr) {
     var oh = h, oc = cols, or = rows;
+    var frac = oh ? volume / targetVolume() : (mode === "full" ? 1 : 0);   // keep a half-poured screen half full
     cols = nc; rows = nr; N = cols * rows;
     h = new Float32Array(N); u = new Float32Array(N); v = new Float32Array(N);
     P = new Float32Array(N); kf = new Float32Array(N); ag = new Float32Array(N); wm = new Float32Array(N);
     tex8 = new Uint8Array(N * 4);
-    volume = targetVolume();
+    volume = targetVolume() * frac;
     if (oh) {
       for (var y = 0; y < rows; y++) for (var x = 0; x < cols; x++)
         h[y * cols + x] = oh[Math.min(or - 1, (y * or / rows) | 0) * oc + Math.min(oc - 1, (x * oc / cols) | 0)];
-    } else {
-      var L = bandRows(), top = rows - L;
-      for (var y2 = 0; y2 < rows; y2++) {
-        var d = Math.max(0, (y2 + 0.5 - top) / L);
-        for (var x2 = 0; x2 < cols; x2++) h[y2 * cols + x2] = d;
-      }
-    }
+    } else if (frac) fillFlat();
     normalize();
+  }
+
+  // water at rest along the bottom
+  function fillFlat() {
+    var L = bandRows(), top = rows - L;
+    for (var y = 0; y < rows; y++) {
+      var d = Math.max(0, (y + 0.5 - top) / L);
+      for (var x = 0; x < cols; x++) h[y * cols + x] = d;
+    }
   }
 
   function normalize() {
     var s = 0;
     for (var i = 0; i < N; i++) s += h[i];
+    if (volume <= 0) { drift = 0; if (s > 0) h.fill(0); return; }
     drift = s / volume - 1;
     if (s > 0) { var f = volume / s; for (var j = 0; j < N; j++) h[j] *= f; }
   }
@@ -378,6 +398,7 @@
   function updateAgitation(dt) {
     var decay = Math.exp(-dt * 2.5), dry = Math.exp(-dt / 1.8), scale = 1 / (S.speed * rows * 0.35);
     var flowSum = 0, hSum = 0;
+    wetMax = 0;
     for (var y = 0, i = 0; y < rows; y++) for (var x = 0; x < cols; x++, i++) {
       var fu = x < cols - 1 ? u[i] : 0, fv = y < rows - 1 ? v[i] : 0;
       var vel = Math.sqrt(fu * fu + fv * fv) / (h[i] + 0.15) * scale;
@@ -385,6 +406,7 @@
       var a = Math.min(1, vel * 1.2);   // local motion: drives foam, whitecaps and ripples
       ag[i] = Math.max(ag[i] * decay, a);
       wm[i] = h[i] > 0.02 ? 1 : wm[i] * dry;
+      if (wm[i] > wetMax) wetMax = wm[i];
     }
     // average speed weighted by depth, so a thin film draining down the screen barely counts
     var target = Math.min(1, flowSum / Math.max(1e-6, hSum) * scale * ACT_GAIN);
@@ -443,7 +465,7 @@
   }
 
   // ---------- frame loop ----------
-  var ACT_GAIN = 8, act = 0, flow = 0;
+  var ACT_GAIN = 8, act = 0, flow = 0, wetMax = 0, idle = false;
   var last = 0, raf = 0, surfClock = 2.5, surfPulse = 0, surfPhase = 0;
   var fps = 60, frameCount = 0, fpsClock = 0;
 
@@ -452,6 +474,12 @@
     if (!N) { resize(); return; }
     var dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
     last = now;
+    // drained and dry: clear once, then do nothing until the water comes back
+    if ((mode === "empty" || mode === "waiting") && volume <= 0 && wetMax < 0.01) {
+      if (!idle) { idle = true; draw(now); if (bend) { bend.layer.style.display = "none"; bend.clip = "none"; } }
+      return;
+    }
+    idle = false;
     frameCount++; fpsClock += dt;
     if (fpsClock > 0.5) { fps = frameCount / fpsClock; frameCount = 0; fpsClock = 0; if (LAB) labReadout(); }
 
@@ -509,6 +537,9 @@
       }
     }
 
+    if (mode === "crash" || mode === "pouring") inflow(dt);
+    else if (mode === "draining") drainStep(dt);
+
     // stable sub-steps
     var c = S.speed * rows * Math.sqrt(2 * grav.z + 1) * 1.6;
     var n = Math.max(1, Math.ceil(dt * c / 0.45));
@@ -518,6 +549,91 @@
     draw(now);
     updateBend();
   }
+
+  // ---------- pour in and drain ----------
+  var fillT = 0, crashPhase = 0;
+  function inflow(dt) {
+    var target = targetVolume(), amt = Math.min(target - volume, target / (mode === "crash" ? 1.1 : 2.6) * dt);
+    if (amt <= 0) { mode = "full"; volume = target; setTap(); return; }
+    fillT += dt;
+    var fall = S.speed * rows * 2, x, y, i, w, sum = 0;
+    if (mode === "crash") {
+      // the first wave of a visit: a lumpy sheet over the full width, its lip rolling sideways as it falls
+      for (x = 0; x < cols; x++) sum += 0.55 + 0.45 * Math.sin(x / cols * 7.3 + crashPhase + fillT * 3);
+      for (y = 0; y < 2; y++) for (x = 0; x < cols; x++) {
+        i = y * cols + x; w = (0.55 + 0.45 * Math.sin(x / cols * 7.3 + crashPhase + fillT * 3)) / sum / 2;
+        h[i] += amt * w;
+        v[i] = Math.max(v[i], h[i] * fall);
+        u[i] += h[i] * fall * 0.25;
+      }
+    } else {
+      // a refill: a narrow stream from the centre top, wobbling a little
+      var hw = Math.max(1, cols * 0.012), c = cols / 2 + Math.sin(fillT * 5) * 0.6;
+      var x0 = Math.max(0, Math.floor(c - hw)), x1 = Math.min(cols - 1, Math.ceil(c + hw));
+      for (y = 0; y < 2; y++) for (x = x0; x <= x1; x++) {
+        i = y * cols + x;
+        h[i] += amt / (2 * (x1 - x0 + 1));
+        v[i] = Math.max(v[i], h[i] * fall);
+      }
+    }
+    volume += amt;
+  }
+  function drainStep(dt) {
+    fillT += dt;
+    var r = tap.getBoundingClientRect(), rowPx = H / rows;
+    var hx = (r.left + r.width / 2) / cellPx, hy = (r.top + r.height / 2) / rowPx, R = Math.max(1.5, r.width / 2 / cellPx);
+    // everything is drawn toward the hole and swirls as it nears it
+    var pull = S.speed * rows * 2 * Math.min(1, fillT / 0.5), fade = fillT > 2 ? Math.exp(-dt * (fillT - 2) * 2) : 1, gone = 0;
+    for (var y = 0, i = 0; y < rows; y++) for (var x = 0; x < cols; x++, i++) {
+      if (h[i] <= 0) continue;
+      var dx = hx - x - 0.5, dy = hy - y - 0.5, d = Math.sqrt(dx * dx + dy * dy) + 1e-3;
+      var k = pull * dt * Math.min(h[i], 1), sw = d < R * 5 ? 0.8 * (1 - d / (R * 5)) : 0;
+      u[i] += k * (dx - sw * dy) / d;
+      v[i] += k * (dy + sw * dx) / d;
+      var take = d < R * 1.4 ? h[i] * Math.min(1, dt * 12) : 0;
+      take += (h[i] - take) * (1 - fade);   // the last thin film soaks away
+      h[i] -= take; gone += take;
+    }
+    volume = Math.max(0, volume - gone);
+    if (volume < targetVolume() * 0.003 || fillT > 7) {
+      h.fill(0); u.fill(0); v.fill(0); volume = 0;
+      mode = "empty"; setTap();
+    }
+  }
+
+  var ICON_DRAIN = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 9h8M7 12h10M8 15h8\"/></svg>";
+  var ICON_FILL = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3c3.5 4.6 6 7.8 6 11a6 6 0 0 1-12 0c0-3.2 2.5-6.4 6-11z\"/><path d=\"M12 11v6M9 14h6\" stroke-linecap=\"round\"/></svg>";
+  var tap = document.createElement("button");
+  tap.type = "button"; tap.className = "water-tap";
+  document.body.appendChild(tap);
+  function setTap() {
+    var empty = mode === "empty" || mode === "waiting";
+    tap.classList.toggle("hole", mode === "draining");
+    tap.innerHTML = empty ? ICON_FILL : ICON_DRAIN;
+    var label = empty || mode === "draining" ? "Pour the water back in" : "Drain the water";
+    tap.setAttribute("aria-label", label); tap.title = label;
+  }
+  function remember(state) {
+    try { state ? localStorage.setItem("water-state", state) : localStorage.removeItem("water-state"); sessionStorage.setItem("water-in", "1"); } catch (e) {}
+  }
+  tap.addEventListener("click", function () {
+    var draining = mode === "full" || mode === "crash" || mode === "pouring";
+    remember(draining ? "empty" : null);
+    if (reduce) {
+      // no animation: the water is simply there or gone
+      mode = draining ? "empty" : "full";
+      h.fill(0); volume = 0;
+      if (!draining) { volume = targetVolume(); fillFlat(); normalize(); }
+      draw(0); setTap(); return;
+    }
+    mode = draining ? "draining" : "pouring"; fillT = 0; setTap();
+  });
+  setTap();
+  if (mode === "waiting") setTimeout(function () {
+    if (mode !== "waiting") return;
+    remember(null);
+    mode = "crash"; fillT = 0; crashPhase = Math.random() * 6.28; setTap();
+  }, 900);
 
   function start() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
@@ -611,7 +727,7 @@
       inp.value = S[key]; out.textContent = fmt(S[key]);
       inp.addEventListener("input", function () {
         S[key] = +inp.value; out.textContent = fmt(S[key]);
-        if (key === "level") { volume = targetVolume(); }
+        if (key === "level" && mode === "full") { volume = targetVolume(); }
         save();
       });
       panel.appendChild(lb);
