@@ -30,6 +30,8 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   light), copied from the cover section of `index.html` in the timshoes/RuscellaImmersive repo. It is shown in an
   iframe on the Ri website case study; its links open ruscellaimmersive.com. Desktop: drag to look around;
   phones: look-around with phone motion is on by default (iPhone after one tap on the stage).
+- `embed/ri-about-banner.html` is the Ri About page header (CSS-only swinging ghost light, shadows on a purple wall),
+  from `about/index.html` in the same repo, also shown on the Ri website case study.
 - Links between pages are relative (`../` from `work/`).
 - Respect `prefers-reduced-motion` in anything animated.
 - Commit with clear messages and push; tell Tim the preview or live URL to check.
