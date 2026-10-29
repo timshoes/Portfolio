@@ -216,6 +216,9 @@ html.menu-open,html.menu-open body{overflow:hidden}
 
 /* portfolio embed: the banner fills the frame; desktop shows how to look around */
 .cover{min-height:100vh;height:100vh}
+/* no next section peeks in here, so the headline, copy and buttons sit at the bottom of the frame */
+:root{--peek:0px}
+.copy{min-height:100vh;padding-bottom:clamp(32px,7vh,72px)}
 .draghint{position:absolute;right:20px;bottom:20px;z-index:6;font:600 13px/1 var(--sans);letter-spacing:.04em;color:#FFFFFF;background:rgba(11,2,32,.72);padding:8px 13px;border-radius:999px;pointer-events:none}
 @media (pointer:coarse){.draghint{display:none}}
 </style>
