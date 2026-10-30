@@ -34,6 +34,9 @@ of `site.css` (sunset palette, Shrikhand display face, Work Sans body).
   phones: look-around with phone motion is on by default (iPhone after one tap on the stage).
 - `embed/ri-about-banner.html` is the Ri About page header (CSS-only swinging ghost light, shadows on a purple wall),
   from `about/index.html` in the same repo, also shown on the Ri website case study.
+- Home 360 hero (`js/pano.js`, `data-look`): on phones the view follows phone motion by default, with the Ri-style
+  360 switch top-left (off is remembered in `localStorage` key `pano-look`); iPhone starts it on the first tap on the
+  scene. Dragging stops the automatic turn and the scroll turn for the rest of the visit.
 - Links between pages are relative (`../` from `work/`).
 - Respect `prefers-reduced-motion` in anything animated.
 - Commit with clear messages and push; tell Tim the preview or live URL to check.

@@ -196,6 +196,16 @@ blockquote cite { display: block; margin-top: 10px; font-style: normal; font-siz
 .pano canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: pan-y; opacity: 0; transition: opacity .8s ease; }
 .pano.pano-ready canvas { opacity: 1; }
 .pano.pano-grab canvas { cursor: grabbing; }
+/* phones: the same 360 switch as the Ri website; on = the view follows the phone */
+.pano-look { position: absolute; left: 14px; top: 14px; z-index: 2; display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 5px 6px 5px 8px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; background: rgba(31,46,58,.55); color: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); font: inherit; }
+.pano-look:focus-visible { outline: 2px solid var(--sun); outline-offset: 3px; }
+.pano-look[aria-pressed="true"] { border-color: var(--sun-glow); }
+.pano-look .pl-icon { width: 22px; height: 22px; display: block; color: rgba(255,255,255,.8); }
+.pano-look[aria-pressed="true"] .pl-icon { color: var(--sun-glow); }
+.pl-switch { position: relative; width: 28px; height: 16px; border-radius: 999px; background: rgba(255,255,255,.28); transition: background .25s; flex: none; }
+.pl-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .25s; }
+.pano-look[aria-pressed="true"] .pl-switch { background: var(--sun); }
+.pano-look[aria-pressed="true"] .pl-switch::after { transform: translateX(12px); background: var(--ink); }
 .hero-360 .wrap { position: relative; z-index: 1; width: 100%; padding-block: 120px 48px; grid-template-columns: minmax(0, 640px) 1fr; align-items: end; pointer-events: none; }
 .hero-card { pointer-events: auto; background: var(--foam); border-radius: var(--radius-lg); padding: clamp(24px, 4vw, 44px); }
 .hero-360 h1 { margin-top: 12px; font-size: clamp(38px, 5vw, 68px); }
