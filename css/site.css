@@ -274,7 +274,7 @@ button.btn { cursor: pointer; font-family: inherit; }
 .foot-links a { color: var(--foam); font-weight: 600; }
 
 /* about page */
-.about-top { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 56px; padding-block: 56px 32px; align-items: start; }
+.about-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px; padding-block: 56px 32px; align-items: start; }
 .about-photo { aspect-ratio: 1 / 1; border-radius: var(--radius-lg); overflow: hidden; background: var(--sky); }
 .about-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .about h1 { margin: 10px 0 18px; font-family: var(--display); font-weight: 400; font-size: clamp(44px, 6vw, 80px); line-height: 1.02; color: var(--ember); }
