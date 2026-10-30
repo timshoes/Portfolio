@@ -252,7 +252,6 @@ button.btn { cursor: pointer; font-family: inherit; }
 .pano-stage.pano-grab canvas { cursor: grabbing; }
 .pano-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); color: var(--foam); font-size: 15px; }
 .pano-title { font-weight: 600; margin-right: auto; }
-.pano-tip { color: var(--sand); font-size: 14px; }
 .pano-bar button { font: inherit; font-weight: 600; font-size: 14px; padding: 9px 16px; border-radius: 10px; border: 0; cursor: pointer; background: var(--foam); color: var(--ink); }
 .pano-bar .pano-close { background: var(--sun); }
 
@@ -355,3 +354,8 @@ button.btn { cursor: pointer; font-family: inherit; }
   .hero-card .title-line { letter-spacing: .1em; font-size: min(13px, 3.9cqi); line-height: 1.6; }
   .site-foot .title-line { font-size: min(14px, 4.2cqi); line-height: 1.6; }
 }
+
+/* the full-screen 360 has the same hint and switch as the home banner */
+.pano-modal .pano-hint { position: absolute; top: 14px; right: 14px; bottom: auto; z-index: 2; }
+/* on narrow phones the hint never runs under the 360 switch */
+@media (pointer: coarse) { .pano-hint { max-width: calc(100% - 112px); text-align: right; line-height: 1.35; } }

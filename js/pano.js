@@ -65,7 +65,7 @@
     function end() { drag = null; host.classList.remove("pano-grab"); }
     canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
 
-    if (opts.look && touch && !reduce && window.DeviceOrientationEvent) look(self, host, function () { return drag; });
+    if (opts.look && touch && !reduce && window.DeviceOrientationEvent) look(self, host, function () { return drag; }, opts.tapped);
 
     // scroll to pan: a quarter turn across the first screen of scrolling
     if (opts.scroll && !reduce) {
@@ -113,7 +113,7 @@
   }
   // phone motion: the phone becomes a window into the 360. On by default on phones and tablets; the switch
   // turns it off (remembered). iPhone asks permission, so there it starts on the first tap on the scene.
-  function look(self, host, dragging) {
+  function look(self, host, dragging, tapped) {
     var btn = document.createElement("button");
     btn.type = "button"; btn.className = "pano-look";
     btn.setAttribute("aria-label", "Look around by moving your phone");
@@ -141,9 +141,10 @@
     }
     self.recal = function () { cal = true; self.gyro = null; };
     function listen() { if (!listening) { listening = true; window.addEventListener("deviceorientation", reading); } }
+    self.unlook = function () { window.removeEventListener("deviceorientation", reading); };
     function setOn(v) {
       on = v; self.recal(); render();
-      if (v) { self.drift = 0; self.held = true; hint("360° · move your phone to look around"); }
+      if (v) { self.drift = 0; self.held = true; hint("360° · move your phone"); }
       else hint("360° · drag to look around");
     }
     function expectReadings() {
@@ -151,7 +152,7 @@
       setTimeout(function () {
         if (!on || lastReading > asked - 50) return;
         setOn(false);
-        hint(navigator.brave ? "Motion is off in Brave: allow Motion sensors in Site settings" : "This browser is not sharing motion");
+        hint(navigator.brave ? "Motion is off: allow it in Site settings" : "This browser is not sharing motion");
       }, 1500);
     }
     function turnOn() {
@@ -168,9 +169,10 @@
     });
     render();
     if (!off) {
-      if (!needsPermission) turnOn();
+      // opened by a tap (the full-screen experience): iPhone can ask for motion straight away
+      if (!needsPermission || tapped) turnOn();
       else {
-        hint("360° · tap, then move your phone to look around");
+        hint("360° · tap, then move your phone");
         host.addEventListener("click", function first() { host.removeEventListener("click", first); if (!on) turnOn(); });
       }
     }
@@ -181,7 +183,7 @@
 
   Viewer.prototype.play = function () { var p = this.video.play(); if (p && p.catch) p.catch(function () {}); };
   Viewer.prototype.destroy = function () {
-    this.alive = false; this.video.pause(); this.video.removeAttribute("src"); this.video.load();
+    this.alive = false; if (this.unlook) this.unlook(); this.video.pause(); this.video.removeAttribute("src"); this.video.load();
     var ext = this.gl && this.gl.getExtension("WEBGL_lose_context"); if (ext) ext.loseContext();
   };
 
@@ -198,12 +200,12 @@
       var box = document.createElement("div");
       box.className = "pano-modal"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
       box.setAttribute("aria-label", btn.dataset.label || "360° experience");
-      box.innerHTML = '<div class="pano-stage"></div>' +
-        '<div class="pano-bar"><span class="pano-title"></span><span class="pano-tip">Drag to look around</span>' +
+      box.innerHTML = '<div class="pano-stage"></div><span class="pano-hint" aria-hidden="true">360° · drag to look around</span>' +
+        '<div class="pano-bar"><span class="pano-title"></span>' +
         '<button type="button" class="pano-sound">Sound off</button><button type="button" class="pano-close">Close</button></div>';
       box.querySelector(".pano-title").textContent = btn.dataset.label || "";
       document.body.appendChild(box); document.documentElement.classList.add("pano-lock");
-      var v = new Viewer(box.querySelector(".pano-stage"), { src: btn.dataset.src, poster: btn.dataset.poster, modal: true, muted: false, fov: 85 });
+      var v = new Viewer(box.querySelector(".pano-stage"), { src: btn.dataset.src, poster: btn.dataset.poster, modal: true, muted: false, fov: 85, look: true, tapped: true });
       var snd = box.querySelector(".pano-sound");
       function label() { snd.textContent = v.video.muted ? "Sound on" : "Sound off"; }
       v.video.addEventListener("volumechange", label);
