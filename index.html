@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Tim Howes Portfolio</title>
-<script src="js/pano.js" defer></script>
+<script src="js/surf.js" defer></script>
 <script src="js/water.js" defer></script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shrikhand&family=Work+Sans:wght@400;500;600&display=swap">
@@ -13,8 +13,12 @@
   <nav class="nav" aria-label="Main"><a href="index.html#work">Work</a><a href="about.html">About</a><a class="btn" href="#contact">Contact</a></nav>
 </div></header>
 <main>
-<section class="hero hero-360">
-  <div class="pano" data-pano data-scroll data-src="video/beach-360.mp4" data-poster="img/beach-360-poster.jpg" aria-label="360° video of a beach. Drag to look around."></div>
+<section class="hero hero-360 hero-surf">
+  <div class="surf-header" role="img" aria-label="Tim as a bobble-head surfer riding a breaking wave. Drag the surfboard to do tricks.">
+    <canvas class="wave"></canvas>
+    <canvas class="fx"></canvas>
+    <div class="surf-hint">Grab the board &amp; shred 🤙</div>
+  </div>
   <div class="wrap">
     <div class="hero-card">
       <p class="eyebrow">Brand Strategist | Creative Leader | Certified Scrum Master</p>
@@ -24,7 +28,6 @@
       <div class="actions"><a class="btn" href="#work">See my work</a><a class="btn ghost" href="about.html">About me</a></div>
     </div>
   </div>
-  <span class="pano-hint" aria-hidden="true">360° · drag to look around</span>
 </section>
 <section class="lead" id="leadership"><div class="wrap">
   <div class="lead-head"><p class="eyebrow">Leadership</p><h2>Teams that ship.</h2><p>I’ve led creative and delivery teams at startups, an agency and Oracle, in the same room and across three continents, often several teams at once. I’ve managed external contracted teams alongside my own, and I handle the client relationship and the project plan as well as the creative. I keep teams small, close to the work and shipping often.</p><p class="lead-cert"><img src="img/csm-badge.webp" alt="Scrum Alliance Certified ScrumMaster badge" width="96" height="94"><span>Certified ScrumMaster since 2016, active through 2028.</span></p><a class="btn ghost" href="about.html#how-i-lead">How I lead →</a></div>
