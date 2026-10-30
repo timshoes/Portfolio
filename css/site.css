@@ -319,3 +319,6 @@ button.btn { cursor: pointer; font-family: inherit; }
 .lead-cert { display: flex; align-items: center; gap: 14px; }
 .lead-cert img { width: 84px; height: auto; flex: none; }
 .cert-ribbon img { width: auto; max-height: 460px; margin-inline: auto; background: transparent; border: 0; border-radius: 0; }
+
+/* keep each part of the title line together; it only breaks between parts */
+.nw { white-space: nowrap; }
