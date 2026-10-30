@@ -320,5 +320,16 @@ button.btn { cursor: pointer; font-family: inherit; }
 .lead-cert img { width: 84px; height: auto; flex: none; }
 .cert-ribbon img { width: auto; max-height: 460px; margin-inline: auto; background: transparent; border: 0; border-radius: 0; }
 
-/* keep each part of the title line together; it only breaks between parts */
-.nw { white-space: nowrap; }
+/* the title line stays on one line (shrinking to fit) above phone size; on phones it is two lines,
+   "… Creative Leader" over "Certified Scrum Master" */
+.hero-card, .site-foot .small { container-type: inline-size; }
+.title-line { white-space: nowrap; }
+.hero-card .title-line { font-size: min(13px, 2.2cqi); }
+.site-foot .title-line { font-size: min(14px, 2.75cqi); }
+.tl-br { display: none; }
+@media (max-width: 700px) {
+  .tl-br { display: inline; }
+  .tl-sep { display: none; }
+  .hero-card .title-line { letter-spacing: .1em; font-size: min(13px, 3.9cqi); line-height: 1.6; }
+  .site-foot .title-line { font-size: min(14px, 4.2cqi); line-height: 1.6; }
+}
