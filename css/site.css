@@ -210,6 +210,21 @@ blockquote cite { display: block; margin-top: 10px; font-style: normal; font-siz
   .pano-hint { top: 14px; right: 14px; bottom: auto; }
 }
 
+/* bobble-head surfer banner (js/surf.js); the hero card sits below it so it never covers the board */
+.hero.hero-surf { min-height: 0; display: block; background: var(--foam); }
+.hero.hero-surf .wrap { padding-block: 32px 48px; margin-top: 0; }
+.surf-header { position: relative; height: clamp(420px, 72vh, 760px); overflow: hidden; background: #0e3b44; user-select: none; -webkit-user-select: none; }
+.surf-header canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.surf-header canvas.fx { cursor: grab; touch-action: pan-y; }
+.surf-header canvas.fx.dragging { cursor: grabbing; }
+.surf-hint { position: absolute; right: 20px; top: 20px; font-size: 13px; font-weight: 600; letter-spacing: .04em; background: rgba(31,46,58,.72); color: var(--foam); padding: 7px 12px; border-radius: 999px; pointer-events: none; transition: opacity .8s ease; }
+.surf-hint.gone { opacity: 0; }
+@media (max-width: 860px) {
+  .surf-header { height: 62vh; }
+  .hero.hero-surf .wrap { padding-block: 24px 32px; margin-top: 0; }
+  .surf-hint { top: 14px; right: 14px; }
+}
+
 /* results on cards */
 .card .result { margin: -4px 0 0; font-size: 15px; font-weight: 600; color: var(--ink); display: flex; gap: 8px; align-items: baseline; }
 .card .result::before { content: ""; flex: none; width: 12px; height: 6px; border-radius: 3px; background: var(--sun); box-shadow: 0 8px 0 var(--sky); transform: translateY(-3px); }
